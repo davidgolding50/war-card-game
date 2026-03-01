@@ -97,3 +97,10 @@ body {
 .deal-burst {
   animation: dealBurst 1.8s ease-out forwards;
 }
+
+.battle-grid {
+  background-image:
+    linear-gradient(to right, rgba(251, 191, 36, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(251, 191, 36, 0.12) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
