@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+  background:
+    radial-gradient(circle at 50% -20%, rgba(255, 220, 130, 0.25), transparent 45%),
+    radial-gradient(circle at 20% 120%, rgba(30, 90, 70, 0.55), transparent 40%),
+    linear-gradient(180deg, #02140d 0%, #07271b 100%);
+  color: #ecfdf5;
+}
+
+.casino-felt {
+  background:
+    radial-gradient(circle at 50% 35%, rgba(74, 222, 128, 0.14), transparent 38%),
+    radial-gradient(circle at 20% 18%, rgba(56, 189, 142, 0.22), transparent 35%),
+    radial-gradient(circle at 78% 70%, rgba(6, 95, 70, 0.58), transparent 45%),
+    linear-gradient(165deg, #136444 0%, #0d4f38 38%, #0b3c2d 100%);
+  position: relative;
+}
+
+.casino-felt::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%);
+  background-size: 20px 20px;
+  opacity: 0.15;
+  pointer-events: none;
+}
+
+.casino-felt::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 1.6rem;
+  border: 4px solid rgba(168, 85, 32, 0.35);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 234, 171, 0.28),
+    inset 0 18px 28px rgba(17, 24, 39, 0.42),
+    0 0 0 1px rgba(68, 32, 11, 0.45);
+  pointer-events: none;
+}
+
+@keyframes dealBurst {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
+.deal-burst {
+  animation: dealBurst 0.9s ease-out forwards;
+}
