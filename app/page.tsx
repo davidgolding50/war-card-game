@@ -5,6 +5,8 @@ import { Card, GameState, PlayerId, createInitialGameState, playRound } from "@/
 
 type RoundOutcome = "none" | "player" | "computer" | "war" | "player_game" | "computer_game";
 type FeltTheme = "emerald" | "royal" | "crimson";
+type BurstTone = "gold" | "emerald" | "red";
+type BurstNotice = { id: number; text: string; tone: BurstTone };
 
 type UiState = {
   game: GameState;
@@ -156,7 +158,9 @@ export default function Page() {
 
   const sfxContextRef = useRef<AudioContext | null>(null);
   const prevRoundRef = useRef(0);
-  const [burst, setBurst] = useState<{ text: string; tone: "gold" | "emerald" | "red" } | null>(null);
+  const burstIdRef = useRef(0);
+  const [burst, setBurst] = useState<BurstNotice | null>(null);
+  const [burstQueue, setBurstQueue] = useState<BurstNotice[]>([]);
 
   useEffect(() => {
     if (!state.autoPlay || state.game.winner) {
@@ -356,19 +360,19 @@ export default function Page() {
 
     prevRoundRef.current = state.game.round;
 
-    let nextBurst: { text: string; tone: "gold" | "emerald" | "red" } | null = null;
+    let nextBurst: BurstNotice | null = null;
     if (state.lastOutcome === "player" || state.lastOutcome === "player_game") {
-      nextBurst = { text: "You Win The Deal", tone: "emerald" };
+      nextBurst = { id: burstIdRef.current + 1, text: "You Win The Deal", tone: "emerald" };
     } else if (state.lastOutcome === "computer" || state.lastOutcome === "computer_game") {
-      nextBurst = { text: "Computer Wins Deal", tone: "red" };
+      nextBurst = { id: burstIdRef.current + 1, text: "Computer Wins Deal", tone: "red" };
     } else if (state.lastOutcome === "war") {
-      nextBurst = { text: "WAR!", tone: "gold" };
+      nextBurst = { id: burstIdRef.current + 1, text: "WAR!", tone: "gold" };
     } else {
-      nextBurst = { text: "Deal", tone: "gold" };
+      nextBurst = { id: burstIdRef.current + 1, text: "Deal", tone: "gold" };
     }
 
-    setBurst(nextBurst);
-    const timer = window.setTimeout(() => setBurst(null), 900);
+    burstIdRef.current += 1;
+    setBurstQueue((current) => [...current, nextBurst]);
 
     const AudioContextClass = window.AudioContext;
     if (AudioContextClass) {
@@ -403,9 +407,29 @@ export default function Page() {
         tone(220, 0.14, 0.09, 0.12);
       }
     }
+  }, [state.game.round, state.lastOutcome]);
+
+  useEffect(() => {
+    if (burst || burstQueue.length === 0) {
+      return;
+    }
+
+    const [next, ...rest] = burstQueue;
+    setBurst(next);
+    setBurstQueue(rest);
+  }, [burst, burstQueue]);
+
+  useEffect(() => {
+    if (!burst) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setBurst(null);
+    }, 1800);
 
     return () => window.clearTimeout(timer);
-  }, [state.game.round, state.lastOutcome]);
+  }, [burst]);
 
   const statusToneClass =
     burst?.tone === "emerald"
@@ -416,6 +440,17 @@ export default function Page() {
 
   return (
     <main className="min-h-screen w-full p-3 sm:p-6 lg:p-8">
+      {burst && (
+        <div className="pointer-events-none fixed left-1/2 top-5 z-50 -translate-x-1/2">
+          <div
+            key={burst.id}
+            className={`deal-burst rounded-full border-2 px-8 py-3 text-2xl font-semibold tracking-wide shadow-2xl ${statusToneClass}`}
+          >
+            {burst.text}
+          </div>
+        </div>
+      )}
+
       <div
         className={`casino-felt felt-${feltTheme} relative mx-auto flex min-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-amber-200/40 px-4 py-5 shadow-[0_30px_120px_rgba(0,0,0,0.6)] sm:px-8 sm:py-7`}
       >
@@ -425,14 +460,6 @@ export default function Page() {
         <div className="pointer-events-none absolute right-[12%] top-[14%] h-9 w-9 rounded-full border border-amber-200/35 bg-blue-500/35 shadow-[0_0_20px_rgba(96,165,250,0.55)]" />
         <div className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-black/35 to-transparent" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-black/40 to-transparent" />
-
-        {burst && (
-          <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
-            <div className={`deal-burst rounded-full border px-6 py-2 text-xl font-semibold tracking-wide ${statusToneClass}`}>
-              {burst.text}
-            </div>
-          </div>
-        )}
 
         <header className="relative z-10 flex items-start justify-between gap-3 text-amber-50">
           <div>
@@ -455,10 +482,10 @@ export default function Page() {
 
         <section className="relative z-10 mt-6 flex flex-1 flex-col justify-between">
           <div className="mx-auto w-full max-w-4xl rounded-3xl border border-amber-100/25 bg-black/15 px-4 py-4 backdrop-blur-sm sm:px-6">
-            <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-amber-100/85">
-              <span>Computer stack: {state.game.computerDeck.length}</span>
-              <span>Round {state.game.round}</span>
-              <span>War pile: {state.lastPileCount}</span>
+            <div className="grid grid-cols-3 items-center text-xs uppercase tracking-[0.18em] text-amber-100/85">
+              <span className="justify-self-start">Computer stack: {state.game.computerDeck.length}</span>
+              <span className="justify-self-center text-center">Round {state.game.round}</span>
+              <span className="justify-self-end">War pile: {state.lastPileCount}</span>
             </div>
 
             <div className="mt-3 rounded-xl border border-amber-100/25 bg-black/20 px-3 py-2 text-center text-sm text-amber-100/90">
