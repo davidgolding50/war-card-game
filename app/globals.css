@@ -26,6 +26,30 @@ body {
   position: relative;
 }
 
+.casino-felt.felt-emerald {
+  background:
+    radial-gradient(circle at 50% 35%, rgba(74, 222, 128, 0.14), transparent 38%),
+    radial-gradient(circle at 20% 18%, rgba(56, 189, 142, 0.22), transparent 35%),
+    radial-gradient(circle at 78% 70%, rgba(6, 95, 70, 0.58), transparent 45%),
+    linear-gradient(165deg, #136444 0%, #0d4f38 38%, #0b3c2d 100%);
+}
+
+.casino-felt.felt-royal {
+  background:
+    radial-gradient(circle at 50% 35%, rgba(125, 211, 252, 0.14), transparent 38%),
+    radial-gradient(circle at 20% 18%, rgba(59, 130, 246, 0.2), transparent 35%),
+    radial-gradient(circle at 78% 70%, rgba(30, 58, 138, 0.6), transparent 45%),
+    linear-gradient(165deg, #1e3a8a 0%, #1e293b 40%, #172554 100%);
+}
+
+.casino-felt.felt-crimson {
+  background:
+    radial-gradient(circle at 50% 35%, rgba(251, 113, 133, 0.14), transparent 38%),
+    radial-gradient(circle at 20% 18%, rgba(239, 68, 68, 0.2), transparent 35%),
+    radial-gradient(circle at 78% 70%, rgba(127, 29, 29, 0.6), transparent 45%),
+    linear-gradient(165deg, #7f1d1d 0%, #881337 40%, #450a0a 100%);
+}
+
 .casino-felt::before {
   content: "";
   position: absolute;
