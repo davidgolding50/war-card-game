@@ -4,6 +4,7 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import { Card, GameState, PlayerId, createInitialGameState, playRound } from "@/lib/war";
 
 type RoundOutcome = "none" | "player" | "computer" | "war" | "player_game" | "computer_game";
+type FeltTheme = "emerald" | "royal" | "crimson";
 
 type UiState = {
   game: GameState;
@@ -127,9 +128,16 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+const FELT_THEME_BUTTONS: Array<{ id: FeltTheme; label: string }> = [
+  { id: "emerald", label: "Emerald" },
+  { id: "royal", label: "Royal" },
+  { id: "crimson", label: "Crimson" }
+];
+
 export default function Page() {
   const [state, dispatch] = useReducer(reducer, undefined, createUiState);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [feltTheme, setFeltTheme] = useState<FeltTheme>("emerald");
 
   const [notesOpen, setNotesOpen] = useState(false);
   const [notesPosition, setNotesPosition] = useState({ x: 28, y: 120 });
@@ -408,7 +416,9 @@ export default function Page() {
 
   return (
     <main className="min-h-screen w-full p-3 sm:p-6 lg:p-8">
-      <div className="casino-felt relative mx-auto flex min-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-amber-200/40 px-4 py-5 shadow-[0_30px_120px_rgba(0,0,0,0.6)] sm:px-8 sm:py-7">
+      <div
+        className={`casino-felt felt-${feltTheme} relative mx-auto flex min-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-amber-200/40 px-4 py-5 shadow-[0_30px_120px_rgba(0,0,0,0.6)] sm:px-8 sm:py-7`}
+      >
         <div className="pointer-events-none absolute left-1/2 top-[17%] h-[26rem] w-[130%] -translate-x-1/2 rounded-[999px] border border-amber-100/20" />
         <div className="pointer-events-none absolute left-1/2 top-[20%] h-[20rem] w-[100%] -translate-x-1/2 rounded-[999px] border border-amber-100/15 border-dashed" />
         <div className="pointer-events-none absolute left-[12%] top-[14%] h-9 w-9 rounded-full border border-amber-200/35 bg-red-500/35 shadow-[0_0_20px_rgba(248,113,113,0.55)]" />
@@ -526,6 +536,26 @@ export default function Page() {
               >
                 New Game
               </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-amber-100/20 pt-3">
+              <div className="text-xs uppercase tracking-[0.14em] text-amber-100/80">Felt Color</div>
+              <div className="flex flex-wrap items-center gap-2">
+                {FELT_THEME_BUTTONS.map((theme) => (
+                  <button
+                    key={theme.id}
+                    type="button"
+                    onClick={() => setFeltTheme(theme.id)}
+                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] transition ${
+                      feltTheme === theme.id
+                        ? "border-amber-100/90 bg-amber-100/30 text-amber-50"
+                        : "border-amber-100/45 bg-black/25 text-amber-100/90 hover:bg-black/35"
+                    }`}
+                  >
+                    {theme.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-amber-100/20 pt-3">
