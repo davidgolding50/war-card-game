@@ -25,6 +25,7 @@ type Action =
 
 const MAX_LOG = 20;
 const AUTO_PLAY_MS = 500;
+const BURST_DURATION_MS = 1800;
 
 function createUiState(): UiState {
   return {
@@ -159,8 +160,8 @@ export default function Page() {
   const sfxContextRef = useRef<AudioContext | null>(null);
   const prevRoundRef = useRef(0);
   const burstIdRef = useRef(0);
-  const [burst, setBurst] = useState<BurstNotice | null>(null);
-  const [burstQueue, setBurstQueue] = useState<BurstNotice[]>([]);
+  const burstTimersRef = useRef<number[]>([]);
+  const [activeBursts, setActiveBursts] = useState<BurstNotice[]>([]);
 
   useEffect(() => {
     if (!state.autoPlay || state.game.winner) {
@@ -372,7 +373,12 @@ export default function Page() {
     }
 
     burstIdRef.current += 1;
-    setBurstQueue((current) => [...current, nextBurst]);
+    const currentId = nextBurst.id;
+    setActiveBursts((current) => [...current, nextBurst]);
+    const timerId = window.setTimeout(() => {
+      setActiveBursts((current) => current.filter((burst) => burst.id !== currentId));
+    }, BURST_DURATION_MS);
+    burstTimersRef.current.push(timerId);
 
     const AudioContextClass = window.AudioContext;
     if (AudioContextClass) {
@@ -410,43 +416,37 @@ export default function Page() {
   }, [state.game.round, state.lastOutcome]);
 
   useEffect(() => {
-    if (burst || burstQueue.length === 0) {
-      return;
-    }
+    return () => {
+      for (const timerId of burstTimersRef.current) {
+        window.clearTimeout(timerId);
+      }
+      burstTimersRef.current = [];
+    };
+  }, []);
 
-    const [next, ...rest] = burstQueue;
-    setBurst(next);
-    setBurstQueue(rest);
-  }, [burst, burstQueue]);
-
-  useEffect(() => {
-    if (!burst) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setBurst(null);
-    }, 1800);
-
-    return () => window.clearTimeout(timer);
-  }, [burst]);
-
-  const statusToneClass =
-    burst?.tone === "emerald"
+  function statusToneClass(tone: BurstTone): string {
+    return tone === "emerald"
       ? "border-emerald-200/90 bg-emerald-500/30 text-emerald-100"
-      : burst?.tone === "red"
+      : tone === "red"
         ? "border-rose-200/90 bg-rose-600/30 text-rose-100"
         : "border-amber-200/90 bg-amber-500/30 text-amber-100";
+  }
 
   return (
     <main className="min-h-screen w-full p-3 sm:p-6 lg:p-8">
-      {burst && (
+      {activeBursts.length > 0 && (
         <div className="pointer-events-none fixed left-1/2 top-5 z-50 -translate-x-1/2">
-          <div
-            key={burst.id}
-            className={`deal-burst rounded-full border-2 px-8 py-3 text-2xl font-semibold tracking-wide shadow-2xl ${statusToneClass}`}
-          >
-            {burst.text}
+          <div className="flex flex-col-reverse items-center gap-2">
+            {activeBursts.map((burst) => (
+              <div
+                key={burst.id}
+                className={`deal-burst rounded-full border-2 px-8 py-3 text-2xl font-semibold tracking-wide shadow-2xl ${statusToneClass(
+                  burst.tone
+                )}`}
+              >
+                {burst.text}
+              </div>
+            ))}
           </div>
         </div>
       )}
