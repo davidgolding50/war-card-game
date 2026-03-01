@@ -7,6 +7,14 @@ type RoundOutcome = "none" | "player" | "computer" | "war" | "player_game" | "co
 type FeltTheme = "emerald" | "royal" | "crimson";
 type BurstTone = "gold" | "emerald" | "red";
 type BurstNotice = { id: number; text: string; tone: BurstTone };
+type WarPhase = "idle" | "intro" | "cards" | "showdown" | "victory";
+type WarScene = {
+  active: boolean;
+  phase: WarPhase;
+  cardsPlaced: number;
+  totalCards: number;
+  winner: PlayerId | null;
+};
 
 type UiState = {
   game: GameState;
@@ -16,6 +24,7 @@ type UiState = {
   lastPileCount: number;
   lastOutcome: RoundOutcome;
   lastMessage: string;
+  lastHadWar: boolean;
 };
 
 type Action =
@@ -26,6 +35,10 @@ type Action =
 const MAX_LOG = 20;
 const AUTO_PLAY_MS = 500;
 const BURST_DURATION_MS = 1800;
+const WAR_INTRO_MS = 500;
+const WAR_CARD_INTERVAL_MS = 190;
+const WAR_SHOWDOWN_MS = 900;
+const WAR_VICTORY_MS = 1900;
 
 function createUiState(): UiState {
   return {
@@ -35,7 +48,8 @@ function createUiState(): UiState {
     hasStarted: false,
     lastPileCount: 0,
     lastOutcome: "none",
-    lastMessage: "Waiting for first deal"
+    lastMessage: "Waiting for first deal",
+    lastHadWar: false
   };
 }
 
@@ -84,6 +98,7 @@ function reducer(state: UiState, action: Action): UiState {
       const result = playRound(state.game);
       const nextAuto = result.state.winner ? false : state.autoPlay;
       const outcome = inferOutcome(result.events, result.state.winner);
+      const hadWar = result.events.some((event) => event.includes("WAR!"));
 
       return {
         game: result.state,
@@ -92,7 +107,8 @@ function reducer(state: UiState, action: Action): UiState {
         hasStarted: true,
         lastPileCount: result.pileCount,
         lastOutcome: outcome.outcome,
-        lastMessage: outcome.message
+        lastMessage: outcome.message,
+        lastHadWar: hadWar
       };
     }
     default:
@@ -162,9 +178,17 @@ export default function Page() {
   const burstIdRef = useRef(0);
   const burstTimersRef = useRef<number[]>([]);
   const [activeBursts, setActiveBursts] = useState<BurstNotice[]>([]);
+  const warTimersRef = useRef<number[]>([]);
+  const [warScene, setWarScene] = useState<WarScene>({
+    active: false,
+    phase: "idle",
+    cardsPlaced: 0,
+    totalCards: 0,
+    winner: null
+  });
 
   useEffect(() => {
-    if (!state.autoPlay || state.game.winner) {
+    if (!state.autoPlay || state.game.winner || warScene.active) {
       return;
     }
 
@@ -173,11 +197,11 @@ export default function Page() {
     }, AUTO_PLAY_MS);
 
     return () => window.clearInterval(interval);
-  }, [state.autoPlay, state.game.winner]);
+  }, [state.autoPlay, state.game.winner, warScene.active]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.code !== "Space") {
+      if (event.code !== "Space" || warScene.active) {
         return;
       }
 
@@ -192,7 +216,7 @@ export default function Page() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [warScene.active]);
 
   useEffect(() => {
     const blockedMessage = "Cannot assign to read only property 'solana'";
@@ -416,11 +440,126 @@ export default function Page() {
   }, [state.game.round, state.lastOutcome]);
 
   useEffect(() => {
+    if (!state.lastHadWar || state.game.round === 0) {
+      return;
+    }
+
+    if (state.autoPlay) {
+      dispatch({ type: "TOGGLE_AUTOPLAY" });
+    }
+
+    const AudioContextClass = window.AudioContext;
+    const sfxContext =
+      AudioContextClass && (sfxContextRef.current ?? new AudioContextClass());
+    if (sfxContext) {
+      sfxContextRef.current = sfxContext;
+    }
+
+    function pulse(
+      frequency: number,
+      duration: number,
+      volume: number,
+      type: OscillatorType = "triangle",
+      delay = 0
+    ) {
+      if (!sfxContext) {
+        return;
+      }
+      const start = sfxContext.currentTime + delay;
+      const osc = sfxContext.createOscillator();
+      const gain = sfxContext.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(volume, start + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      osc.connect(gain);
+      gain.connect(sfxContext.destination);
+      osc.start(start);
+      osc.stop(start + duration + 0.02);
+    }
+
+    const winner = state.lastOutcome === "player" || state.lastOutcome === "player_game"
+      ? "player"
+      : state.lastOutcome === "computer" || state.lastOutcome === "computer_game"
+        ? "computer"
+        : null;
+    const totalCards = clamp(Math.floor(state.lastPileCount / 2), 6, 12);
+
+    setWarScene({
+      active: true,
+      phase: "intro",
+      cardsPlaced: 0,
+      totalCards,
+      winner
+    });
+    pulse(160, 0.35, 0.15, "sawtooth");
+    pulse(240, 0.33, 0.13, "triangle", 0.08);
+
+    const introTimer = window.setTimeout(() => {
+      setWarScene((current) => ({ ...current, phase: "cards" }));
+
+      let placed = 0;
+      const cardInterval = window.setInterval(() => {
+        placed += 1;
+        setWarScene((current) => ({
+          ...current,
+          phase: "cards",
+          cardsPlaced: Math.min(placed, current.totalCards)
+        }));
+        pulse(placed % 2 === 0 ? 185 : 165, 0.12, 0.09, "triangle");
+
+        if (placed >= totalCards) {
+          window.clearInterval(cardInterval);
+          setWarScene((current) => ({ ...current, phase: "showdown" }));
+          pulse(120, 0.25, 0.14, "sawtooth");
+          pulse(180, 0.26, 0.11, "triangle", 0.07);
+
+          const showdownTimer = window.setTimeout(() => {
+            setWarScene((current) => ({ ...current, phase: "victory" }));
+            if (winner === "player") {
+              pulse(440, 0.2, 0.12);
+              pulse(554.37, 0.2, 0.12, "triangle", 0.1);
+              pulse(659.25, 0.25, 0.13, "triangle", 0.2);
+            } else if (winner === "computer") {
+              pulse(329.63, 0.2, 0.11);
+              pulse(246.94, 0.22, 0.11, "triangle", 0.1);
+              pulse(196, 0.27, 0.12, "triangle", 0.2);
+            } else {
+              pulse(392, 0.2, 0.1);
+              pulse(440, 0.2, 0.1, "triangle", 0.1);
+            }
+
+            const finishTimer = window.setTimeout(() => {
+              setWarScene({
+                active: false,
+                phase: "idle",
+                cardsPlaced: 0,
+                totalCards: 0,
+                winner: null
+              });
+            }, WAR_VICTORY_MS);
+            warTimersRef.current.push(finishTimer);
+          }, WAR_SHOWDOWN_MS);
+          warTimersRef.current.push(showdownTimer);
+        }
+      }, WAR_CARD_INTERVAL_MS);
+      warTimersRef.current.push(cardInterval);
+    }, WAR_INTRO_MS);
+
+    warTimersRef.current.push(introTimer);
+  }, [state.game.round, state.lastHadWar, state.lastOutcome, state.lastPileCount, state.autoPlay]);
+
+  useEffect(() => {
     return () => {
       for (const timerId of burstTimersRef.current) {
         window.clearTimeout(timerId);
       }
       burstTimersRef.current = [];
+      for (const timerId of warTimersRef.current) {
+        window.clearTimeout(timerId);
+      }
+      warTimersRef.current = [];
     };
   }, []);
 
@@ -432,21 +571,109 @@ export default function Page() {
         : "border-amber-200/90 bg-amber-500/30 text-amber-100";
   }
 
+  const visibleBursts = activeBursts.slice(-3);
+  const hiddenBurstCount = activeBursts.length - visibleBursts.length;
+
   return (
     <main className="min-h-screen w-full p-3 sm:p-6 lg:p-8">
       {activeBursts.length > 0 && (
-        <div className="pointer-events-none fixed left-1/2 top-5 z-50 -translate-x-1/2">
-          <div className="flex flex-col-reverse items-center gap-2">
-            {activeBursts.map((burst) => (
+        <div className="pointer-events-none fixed right-4 top-5 z-50">
+          <div className="relative w-[20rem]">
+            {hiddenBurstCount > 0 && (
+              <div className="absolute -left-2 -top-2 rounded-full border border-amber-100/70 bg-black/70 px-2 py-0.5 text-xs font-semibold text-amber-100">
+                +{hiddenBurstCount}
+              </div>
+            )}
+            {visibleBursts.map((burst, index) => (
               <div
                 key={burst.id}
-                className={`deal-burst rounded-full border-2 px-8 py-3 text-2xl font-semibold tracking-wide shadow-2xl ${statusToneClass(
+                className={`deal-burst absolute right-0 rounded-full border-2 px-5 py-2 text-base font-semibold tracking-wide shadow-2xl ${statusToneClass(
                   burst.tone
                 )}`}
+                style={{
+                  top: `${index * 10}px`,
+                  transform: `translateY(${index * 2}px) scale(${1 - index * 0.06})`,
+                  zIndex: 30 - index
+                }}
               >
                 {burst.text}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {warScene.active && (
+        <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-rose-950/85 via-amber-950/70 to-black/85" />
+          <div className="absolute inset-0 battle-grid opacity-55" />
+          <div className="absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-amber-300/20 to-transparent" />
+
+          <div className="absolute left-1/2 top-10 -translate-x-1/2 text-center">
+            <div className="text-xs uppercase tracking-[0.28em] text-amber-200/80">War Sequence</div>
+            <div className="mt-2 text-4xl font-semibold tracking-[0.1em] text-amber-100">GLADIATOR CLASH</div>
+            <div className="mt-2 text-sm text-amber-50/90">
+              {warScene.phase === "intro" && "The arena ignites..."}
+              {warScene.phase === "cards" && "Shields up. Cards slam onto the sand."}
+              {warScene.phase === "showdown" && "Final reveal. Destiny decides."}
+              {warScene.phase === "victory" &&
+                (warScene.winner === "player"
+                  ? "You conquer the war."
+                  : warScene.winner === "computer"
+                    ? "Computer conquers the war."
+                    : "The clash ends in thunder.")}
+            </div>
+          </div>
+
+          <div className="absolute inset-x-0 bottom-[24%] top-[30%]">
+            <div className="absolute left-[17%] top-1/2 -translate-y-1/2 text-center">
+              <div className="mb-3 text-xs uppercase tracking-[0.2em] text-amber-100/80">Player Legion</div>
+              <div className="relative h-48 w-36">
+                {Array.from({ length: warScene.cardsPlaced }).map((_, index) => (
+                  <div
+                    key={`player-war-${index}`}
+                    className="absolute h-16 w-11 rounded-md border border-amber-100/60 bg-gradient-to-b from-emerald-800 to-emerald-950 shadow-xl"
+                    style={{
+                      left: `${(index % 4) * 14}px`,
+                      top: `${Math.floor(index / 4) * 18}px`,
+                      transform: "rotate(-7deg)"
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="absolute left-1/2 top-1/2 w-[34rem] -translate-x-1/2 -translate-y-1/2">
+              <div className="h-40 rounded-[999px] border border-amber-200/45 bg-gradient-to-b from-amber-700/20 to-rose-900/20 shadow-[inset_0_0_80px_rgba(0,0,0,0.45)]" />
+              <div className="absolute inset-0 grid place-items-center">
+                <div className="rounded-full border border-amber-100/60 bg-black/35 px-6 py-2 text-lg font-semibold tracking-wide text-amber-100 shadow-2xl">
+                  {warScene.phase === "victory"
+                    ? warScene.winner === "player"
+                      ? "PLAYER VICTORY"
+                      : warScene.winner === "computer"
+                        ? "COMPUTER VICTORY"
+                        : "WAR ENDS"
+                    : "WAR IN PROGRESS"}
+                </div>
+              </div>
+            </div>
+
+            <div className="absolute right-[17%] top-1/2 -translate-y-1/2 text-center">
+              <div className="mb-3 text-xs uppercase tracking-[0.2em] text-amber-100/80">Computer Legion</div>
+              <div className="relative ml-auto h-48 w-36">
+                {Array.from({ length: warScene.cardsPlaced }).map((_, index) => (
+                  <div
+                    key={`computer-war-${index}`}
+                    className="absolute h-16 w-11 rounded-md border border-amber-100/60 bg-gradient-to-b from-slate-700 to-slate-950 shadow-xl"
+                    style={{
+                      right: `${(index % 4) * 14}px`,
+                      top: `${Math.floor(index / 4) * 18}px`,
+                      transform: "rotate(7deg)"
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -467,7 +694,9 @@ export default function Page() {
             <h1 className="mt-1 text-2xl font-semibold tracking-wide sm:text-3xl">WAR: Heads Up</h1>
             <p className="mt-1 text-sm text-emerald-100/85">
               {state.hasStarted
-                ? "Press Space or Next Deal to continue."
+                ? warScene.active
+                  ? "War cinematic active. Controls resume after the clash."
+                  : "Press Space or Next Deal to continue."
                 : "Press Start Deal to begin the match."}
             </p>
           </div>
@@ -531,7 +760,7 @@ export default function Page() {
                 <button
                   type="button"
                   onClick={() => dispatch({ type: "DEAL" })}
-                  disabled={Boolean(state.game.winner)}
+                  disabled={Boolean(state.game.winner) || warScene.active}
                   className="rounded-full border border-amber-50/80 bg-gradient-to-b from-amber-100 to-amber-300 px-7 py-2.5 text-sm font-bold uppercase tracking-[0.1em] text-emerald-900 shadow-lg shadow-amber-900/45 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Start Deal
@@ -541,7 +770,7 @@ export default function Page() {
                   <button
                     type="button"
                     onClick={() => dispatch({ type: "DEAL" })}
-                    disabled={Boolean(state.game.winner)}
+                    disabled={Boolean(state.game.winner) || warScene.active}
                     className="rounded-full border border-amber-50/70 bg-gradient-to-b from-amber-100 to-amber-300 px-6 py-2 text-sm font-bold uppercase tracking-[0.08em] text-emerald-900 shadow-lg shadow-amber-900/40 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Next Deal
@@ -549,7 +778,7 @@ export default function Page() {
                   <button
                     type="button"
                     onClick={() => dispatch({ type: "TOGGLE_AUTOPLAY" })}
-                    disabled={Boolean(state.game.winner)}
+                    disabled={Boolean(state.game.winner) || warScene.active}
                     className="rounded-full border border-emerald-50/50 bg-emerald-900/65 px-5 py-2 text-sm font-semibold uppercase tracking-[0.08em] text-emerald-100 shadow-lg shadow-black/30 transition hover:bg-emerald-900/85 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {state.autoPlay ? "Pause Auto" : "Auto Deals"}
