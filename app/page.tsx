@@ -21,9 +21,15 @@ type ResolvedHand = {
   tone: "emerald" | "red" | "amber";
 };
 
+type FeltTheme = "emerald" | "royal" | "crimson";
 type WarCinematicPhase = "idle" | "intro" | "deal_down" | "reveal" | "winner" | "aftermath";
 
 const LOG_LIMIT = 24;
+const FELT_THEME_BUTTONS: Array<{ id: FeltTheme; label: string }> = [
+  { id: "emerald", label: "Emerald" },
+  { id: "royal", label: "Royal" },
+  { id: "crimson", label: "Crimson" }
+];
 
 function cardText(card: Card | null): string {
   return card ? `${card.rank}${card.suit}` : "--";
@@ -102,6 +108,7 @@ export default function Page() {
   const limits = useMemo(() => tableLimits(), []);
   const [buyIn, setBuyIn] = useState(500);
   const [ante, setAnte] = useState(25);
+  const [feltTheme, setFeltTheme] = useState<FeltTheme>("emerald");
   const [state, setState] = useState<CasinoWarState | null>(null);
   const [events, setEvents] = useState<string[]>(["Welcome to Casino War. Buy in to begin."]);
   const [result, setResult] = useState<ResolvedHand | null>(null);
@@ -112,6 +119,12 @@ export default function Page() {
   const [warPayload, setWarPayload] = useState<WarResult | null>(null);
   const warTimersRef = useRef<number[]>([]);
   const sfxContextRef = useRef<AudioContext | null>(null);
+  const [musicOn, setMusicOn] = useState(false);
+  const [musicVolume, setMusicVolume] = useState(55);
+  const musicContextRef = useRef<AudioContext | null>(null);
+  const musicTimerRef = useRef<number | null>(null);
+  const musicGainRef = useRef<GainNode | null>(null);
+  const musicStepRef = useRef(0);
 
   function addEvents(next: string[]) {
     setEvents((current) => [...next, ...current].slice(0, LOG_LIMIT));
@@ -269,6 +282,97 @@ export default function Page() {
     return () => clearWarTimers();
   }, []);
 
+  useEffect(() => {
+    function stopMusic() {
+      if (musicTimerRef.current !== null) {
+        window.clearInterval(musicTimerRef.current);
+        musicTimerRef.current = null;
+      }
+      if (musicContextRef.current) {
+        void musicContextRef.current.close();
+        musicContextRef.current = null;
+      }
+      musicGainRef.current = null;
+    }
+
+    if (!musicOn) {
+      stopMusic();
+      return;
+    }
+
+    const AudioContextClass = window.AudioContext;
+    if (!AudioContextClass) {
+      return;
+    }
+
+    const context = new AudioContextClass();
+    musicContextRef.current = context;
+
+    const lowpass = context.createBiquadFilter();
+    lowpass.type = "lowpass";
+    lowpass.frequency.setValueAtTime(1400, context.currentTime);
+
+    const masterGain = context.createGain();
+    masterGain.gain.value = 0.45 * (musicVolume / 100);
+
+    lowpass.connect(masterGain);
+    masterGain.connect(context.destination);
+
+    musicGainRef.current = masterGain;
+    musicStepRef.current = 0;
+
+    const progression = [130.81, 110.0, 146.83, 98.0];
+    const topLine = [392.0, 440.0, 493.88, 523.25, 493.88, 440.0, 392.0, 349.23];
+
+    function playTone(
+      frequency: number,
+      start: number,
+      duration: number,
+      type: OscillatorType,
+      volume: number
+    ) {
+      const osc = context.createOscillator();
+      const gain = context.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(volume, start + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      osc.connect(gain);
+      gain.connect(lowpass);
+      osc.start(start);
+      osc.stop(start + duration + 0.04);
+    }
+
+    function tick() {
+      const now = context.currentTime;
+      const step = musicStepRef.current;
+      const root = progression[Math.floor(step / 2) % progression.length];
+      playTone(root, now, 1.3, "triangle", 0.2);
+      playTone(root * 1.26, now + 0.03, 1.25, "triangle", 0.14);
+      playTone(root / 2, now + 0.05, 0.42, "sine", 0.22);
+      if (step % 2 === 1) {
+        playTone(topLine[step % topLine.length], now + 0.16, 0.32, "sine", 0.12);
+      }
+      musicStepRef.current += 1;
+    }
+
+    void context.resume();
+    tick();
+    musicTimerRef.current = window.setInterval(tick, 900);
+
+    return () => stopMusic();
+  }, [musicOn, musicVolume]);
+
+  useEffect(() => {
+    if (musicGainRef.current && musicContextRef.current) {
+      musicGainRef.current.gain.setValueAtTime(
+        0.45 * (musicVolume / 100),
+        musicContextRef.current.currentTime
+      );
+    }
+  }, [musicVolume]);
+
   const quickBuyIns = [100, 250, 500, 1000, 2000];
   const quickAntes = [5, 10, 25, 50, 100, 200];
 
@@ -392,7 +496,9 @@ export default function Page() {
         </div>
       )}
 
-      <div className="casino-felt felt-emerald relative mx-auto flex min-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-amber-200/40 px-4 py-5 shadow-[0_30px_120px_rgba(0,0,0,0.6)] sm:px-8 sm:py-7">
+      <div
+        className={`casino-felt felt-${feltTheme} relative mx-auto flex min-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-amber-200/40 px-4 py-5 shadow-[0_30px_120px_rgba(0,0,0,0.6)] sm:px-8 sm:py-7`}
+      >
         <header className="relative z-10 flex items-start justify-between gap-4 text-amber-50">
           <div>
             <div className="text-xs uppercase tracking-[0.26em] text-amber-200/80">Table Game</div>
@@ -570,6 +676,54 @@ export default function Page() {
                 {event}
               </div>
             ))}
+          </div>
+        </section>
+
+        <section className="mt-5 rounded-xl border border-amber-100/25 bg-black/25 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">Felt Color</div>
+            <div className="flex flex-wrap items-center gap-2">
+              {FELT_THEME_BUTTONS.map((theme) => (
+                <button
+                  key={theme.id}
+                  type="button"
+                  onClick={() => setFeltTheme(theme.id)}
+                  className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] transition ${
+                    feltTheme === theme.id
+                      ? "border-amber-100/90 bg-amber-100/30 text-amber-50"
+                      : "border-amber-100/45 bg-black/25 text-amber-100/90 hover:bg-black/35"
+                  }`}
+                >
+                  {theme.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-amber-100/20 pt-3">
+            <div className="text-xs uppercase tracking-[0.14em] text-amber-100/80">Table Music</div>
+            <button
+              type="button"
+              onClick={() => setMusicOn((previous) => !previous)}
+              className={`rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] transition ${
+                musicOn
+                  ? "border-emerald-200/80 bg-emerald-300/20 text-emerald-100"
+                  : "border-amber-100/50 bg-black/20 text-amber-100"
+              }`}
+            >
+              {musicOn ? "Music On" : "Music Off"}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={musicVolume}
+              onChange={(event) => setMusicVolume(Number(event.target.value))}
+              className="h-1.5 w-36 cursor-pointer accent-amber-300"
+              aria-label="Music volume"
+            />
+            <div className="text-xs text-amber-100/80">{musicVolume}%</div>
           </div>
         </section>
       </div>
