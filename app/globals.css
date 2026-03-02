@@ -55,9 +55,10 @@ body {
   position: absolute;
   inset: 0;
   background-image:
+    url("/assets/table/felt-noise.svg"),
     linear-gradient(45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%),
     linear-gradient(-45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%);
-  background-size: 20px 20px;
+  background-size: 320px 320px, 20px 20px, 20px 20px;
   opacity: 0.15;
   pointer-events: none;
 }

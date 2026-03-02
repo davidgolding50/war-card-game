@@ -15,6 +15,7 @@ import {
   surrender,
   tableLimits
 } from "@/lib/casinoWar";
+import { MEDIA_ASSETS, SfxAssetKey } from "@/lib/mediaAssets";
 
 type ResolvedHand = {
   title: string;
@@ -121,10 +122,13 @@ export default function Page() {
   const sfxContextRef = useRef<AudioContext | null>(null);
   const [musicOn, setMusicOn] = useState(false);
   const [musicVolume, setMusicVolume] = useState(55);
+  const [audioBackend, setAudioBackend] = useState<"asset" | "synth">("asset");
   const musicContextRef = useRef<AudioContext | null>(null);
   const musicTimerRef = useRef<number | null>(null);
   const musicGainRef = useRef<GainNode | null>(null);
   const musicStepRef = useRef(0);
+  const musicElementRef = useRef<HTMLAudioElement | null>(null);
+  const sfxElementsRef = useRef<Partial<Record<SfxAssetKey, HTMLAudioElement>>>({});
 
   function addEvents(next: string[]) {
     setEvents((current) => [...next, ...current].slice(0, LOG_LIMIT));
@@ -138,7 +142,13 @@ export default function Page() {
     warTimersRef.current = [];
   }
 
-  function sfx(frequency: number, duration: number, volume: number, type: OscillatorType = "triangle", delay = 0) {
+  function synthSfx(
+    frequency: number,
+    duration: number,
+    volume: number,
+    type: OscillatorType = "triangle",
+    delay = 0
+  ) {
     const AudioContextClass = window.AudioContext;
     if (!AudioContextClass) {
       return;
@@ -161,14 +171,52 @@ export default function Page() {
     osc.stop(start + duration + 0.02);
   }
 
+  function playAssetSfx(key: SfxAssetKey, volume = 0.55): boolean {
+    const source = MEDIA_ASSETS.sfx[key];
+    const player = sfxElementsRef.current[key] ?? new Audio(source);
+    player.preload = "auto";
+    player.volume = Math.max(0, Math.min(1, (musicVolume / 100) * volume));
+    sfxElementsRef.current[key] = player;
+
+    try {
+      player.currentTime = 0;
+      const result = player.play();
+      if (result) {
+        void result.catch(() => undefined);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function warCue(
+    key: SfxAssetKey,
+    fallback: { frequency: number; duration: number; volume: number; type?: OscillatorType; delay?: number }
+  ) {
+    const played = playAssetSfx(key, 0.75);
+    if (!played) {
+      setAudioBackend("synth");
+      synthSfx(
+        fallback.frequency,
+        fallback.duration,
+        fallback.volume,
+        fallback.type ?? "triangle",
+        fallback.delay ?? 0
+      );
+    } else {
+      setAudioBackend("asset");
+    }
+  }
+
   function startWarCinematic(payload: WarResult) {
     clearWarTimers();
     setWarPayload(payload);
     setWarDownCount(0);
     setWarPhase("intro");
 
-    sfx(120, 0.45, 0.18, "sawtooth");
-    sfx(168, 0.42, 0.14, "triangle", 0.06);
+    warCue("warDrum", { frequency: 120, duration: 0.45, volume: 0.18, type: "sawtooth" });
+    warCue("warDrum", { frequency: 168, duration: 0.42, volume: 0.14, delay: 0.06 });
 
     const introTimer = window.setTimeout(() => {
       setWarPhase("deal_down");
@@ -177,26 +225,26 @@ export default function Page() {
       const dealInterval = window.setInterval(() => {
         placed += 1;
         setWarDownCount(Math.min(placed, 3));
-        sfx(placed % 2 === 0 ? 190 : 160, 0.12, 0.12);
+        warCue("cardHit", { frequency: placed % 2 === 0 ? 190 : 160, duration: 0.12, volume: 0.12 });
 
         if (placed >= 3) {
           window.clearInterval(dealInterval);
           setWarPhase("reveal");
-          sfx(420, 0.2, 0.15);
-          sfx(520, 0.22, 0.13, "triangle", 0.08);
+          warCue("reveal", { frequency: 420, duration: 0.2, volume: 0.15 });
+          warCue("reveal", { frequency: 520, duration: 0.22, volume: 0.13, delay: 0.08 });
 
           const winnerTimer = window.setTimeout(() => {
             setWarPhase("winner");
             if (payload.outcome === "war_player_win") {
-              sfx(440, 0.2, 0.13);
-              sfx(554, 0.2, 0.13, "triangle", 0.08);
-              sfx(660, 0.24, 0.14, "triangle", 0.18);
+              warCue("win", { frequency: 440, duration: 0.2, volume: 0.13 });
+              warCue("win", { frequency: 554, duration: 0.2, volume: 0.13, delay: 0.08 });
+              warCue("win", { frequency: 660, duration: 0.24, volume: 0.14, delay: 0.18 });
             } else if (payload.outcome === "war_dealer_win") {
-              sfx(330, 0.22, 0.13);
-              sfx(247, 0.24, 0.13, "triangle", 0.1);
+              warCue("lose", { frequency: 330, duration: 0.22, volume: 0.13 });
+              warCue("lose", { frequency: 247, duration: 0.24, volume: 0.13, delay: 0.1 });
             } else {
-              sfx(392, 0.2, 0.11);
-              sfx(440, 0.2, 0.11, "triangle", 0.1);
+              warCue("push", { frequency: 392, duration: 0.2, volume: 0.11 });
+              warCue("push", { frequency: 440, duration: 0.2, volume: 0.11, delay: 0.1 });
             }
 
             const revealDownTimer = window.setTimeout(() => {
@@ -284,6 +332,11 @@ export default function Page() {
 
   useEffect(() => {
     function stopMusic() {
+      if (musicElementRef.current) {
+        musicElementRef.current.pause();
+        musicElementRef.current.currentTime = 0;
+        musicElementRef.current = null;
+      }
       if (musicTimerRef.current !== null) {
         window.clearInterval(musicTimerRef.current);
         musicTimerRef.current = null;
@@ -295,76 +348,133 @@ export default function Page() {
       musicGainRef.current = null;
     }
 
+    function startSynthMusic() {
+      const AudioContextClass = window.AudioContext;
+      if (!AudioContextClass) {
+        return;
+      }
+
+      const context = new AudioContextClass();
+      musicContextRef.current = context;
+
+      const lowpass = context.createBiquadFilter();
+      lowpass.type = "lowpass";
+      lowpass.frequency.setValueAtTime(1400, context.currentTime);
+
+      const masterGain = context.createGain();
+      masterGain.gain.value = 0.45 * (musicVolume / 100);
+
+      lowpass.connect(masterGain);
+      masterGain.connect(context.destination);
+
+      musicGainRef.current = masterGain;
+      musicStepRef.current = 0;
+      setAudioBackend("synth");
+
+      const progression = [130.81, 110.0, 146.83, 98.0];
+      const topLine = [392.0, 440.0, 493.88, 523.25, 493.88, 440.0, 392.0, 349.23];
+
+      function playTone(
+        frequency: number,
+        start: number,
+        duration: number,
+        type: OscillatorType,
+        volume: number
+      ) {
+        const osc = context.createOscillator();
+        const gain = context.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(frequency, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(volume, start + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        osc.connect(gain);
+        gain.connect(lowpass);
+        osc.start(start);
+        osc.stop(start + duration + 0.04);
+      }
+
+      function tick() {
+        const now = context.currentTime;
+        const step = musicStepRef.current;
+        const root = progression[Math.floor(step / 2) % progression.length];
+        playTone(root, now, 1.3, "triangle", 0.2);
+        playTone(root * 1.26, now + 0.03, 1.25, "triangle", 0.14);
+        playTone(root / 2, now + 0.05, 0.42, "sine", 0.22);
+        if (step % 2 === 1) {
+          playTone(topLine[step % topLine.length], now + 0.16, 0.32, "sine", 0.12);
+        }
+        musicStepRef.current += 1;
+      }
+
+      void context.resume();
+      tick();
+      musicTimerRef.current = window.setInterval(tick, 900);
+    }
+
     if (!musicOn) {
       stopMusic();
       return;
     }
 
-    const AudioContextClass = window.AudioContext;
-    if (!AudioContextClass) {
-      return;
-    }
+    let cancelled = false;
+    const assetTrack = new Audio(MEDIA_ASSETS.music.lounge);
+    assetTrack.loop = true;
+    assetTrack.preload = "auto";
+    assetTrack.volume = Math.max(0, Math.min(1, musicVolume / 100));
+    musicElementRef.current = assetTrack;
 
-    const context = new AudioContextClass();
-    musicContextRef.current = context;
-
-    const lowpass = context.createBiquadFilter();
-    lowpass.type = "lowpass";
-    lowpass.frequency.setValueAtTime(1400, context.currentTime);
-
-    const masterGain = context.createGain();
-    masterGain.gain.value = 0.45 * (musicVolume / 100);
-
-    lowpass.connect(masterGain);
-    masterGain.connect(context.destination);
-
-    musicGainRef.current = masterGain;
-    musicStepRef.current = 0;
-
-    const progression = [130.81, 110.0, 146.83, 98.0];
-    const topLine = [392.0, 440.0, 493.88, 523.25, 493.88, 440.0, 392.0, 349.23];
-
-    function playTone(
-      frequency: number,
-      start: number,
-      duration: number,
-      type: OscillatorType,
-      volume: number
-    ) {
-      const osc = context.createOscillator();
-      const gain = context.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(frequency, start);
-      gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(volume, start + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-      osc.connect(gain);
-      gain.connect(lowpass);
-      osc.start(start);
-      osc.stop(start + duration + 0.04);
-    }
-
-    function tick() {
-      const now = context.currentTime;
-      const step = musicStepRef.current;
-      const root = progression[Math.floor(step / 2) % progression.length];
-      playTone(root, now, 1.3, "triangle", 0.2);
-      playTone(root * 1.26, now + 0.03, 1.25, "triangle", 0.14);
-      playTone(root / 2, now + 0.05, 0.42, "sine", 0.22);
-      if (step % 2 === 1) {
-        playTone(topLine[step % topLine.length], now + 0.16, 0.32, "sine", 0.12);
+    const onAssetError = () => {
+      if (cancelled) {
+        return;
       }
-      musicStepRef.current += 1;
+      musicElementRef.current = null;
+      startSynthMusic();
+    };
+    assetTrack.addEventListener("error", onAssetError, { once: true });
+
+    try {
+      const playAttempt = assetTrack.play();
+      if (playAttempt) {
+        void playAttempt
+          .then(() => {
+            if (cancelled) {
+              return;
+            }
+            setAudioBackend("asset");
+          })
+          .catch(onAssetError);
+      } else {
+        setAudioBackend("asset");
+      }
+    } catch {
+      onAssetError();
     }
 
-    void context.resume();
-    tick();
-    musicTimerRef.current = window.setInterval(tick, 900);
-
-    return () => stopMusic();
+    return () => {
+      cancelled = true;
+      assetTrack.removeEventListener("error", onAssetError);
+      if (musicElementRef.current === assetTrack) {
+        musicElementRef.current.pause();
+        musicElementRef.current.currentTime = 0;
+        musicElementRef.current = null;
+      }
+      if (musicTimerRef.current !== null) {
+        window.clearInterval(musicTimerRef.current);
+        musicTimerRef.current = null;
+      }
+      if (musicContextRef.current) {
+        void musicContextRef.current.close();
+        musicContextRef.current = null;
+      }
+      musicGainRef.current = null;
+    };
   }, [musicOn, musicVolume]);
 
   useEffect(() => {
+    if (musicElementRef.current) {
+      musicElementRef.current.volume = Math.max(0, Math.min(1, musicVolume / 100));
+    }
     if (musicGainRef.current && musicContextRef.current) {
       musicGainRef.current.gain.setValueAtTime(
         0.45 * (musicVolume / 100),
@@ -372,6 +482,19 @@ export default function Page() {
       );
     }
   }, [musicVolume]);
+
+  useEffect(() => {
+    return () => {
+      for (const key of Object.keys(sfxElementsRef.current) as SfxAssetKey[]) {
+        const item = sfxElementsRef.current[key];
+        if (!item) {
+          continue;
+        }
+        item.pause();
+        item.currentTime = 0;
+      }
+    };
+  }, []);
 
   const quickBuyIns = [100, 250, 500, 1000, 2000];
   const quickAntes = [5, 10, 25, 50, 100, 200];
@@ -724,6 +847,9 @@ export default function Page() {
               aria-label="Music volume"
             />
             <div className="text-xs text-amber-100/80">{musicVolume}%</div>
+            <div className="text-[11px] uppercase tracking-[0.12em] text-amber-200/75">
+              Audio: {audioBackend === "asset" ? "Asset Pack" : "Synth Fallback"}
+            </div>
           </div>
         </section>
       </div>
