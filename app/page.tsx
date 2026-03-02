@@ -40,17 +40,17 @@ function cardColor(card: Card | null): string {
   if (!card) {
     return "text-slate-400";
   }
-  return card.suit === "♥" || card.suit === "♦" ? "text-red-700" : "text-slate-800";
+  return card.suit === "♥" || card.suit === "♦" ? "text-red-700" : "text-slate-900";
 }
 
 function toneClass(tone: ResolvedHand["tone"]): string {
   if (tone === "emerald") {
-    return "border-emerald-300/80 bg-emerald-500/20 text-emerald-100";
+    return "border-emerald-300/70 bg-emerald-500/15 text-emerald-100";
   }
   if (tone === "red") {
-    return "border-rose-300/80 bg-rose-600/20 text-rose-100";
+    return "border-rose-300/70 bg-rose-500/15 text-rose-100";
   }
-  return "border-amber-300/80 bg-amber-500/20 text-amber-100";
+  return "border-amber-300/70 bg-amber-500/15 text-amber-100";
 }
 
 function eventTitle(result: DealResult | WarResult): ResolvedHand {
@@ -77,8 +77,8 @@ function eventTitle(result: DealResult | WarResult): ResolvedHand {
 function CardDisplay({ label, card }: { label: string; card: Card | null }) {
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-100/75">{label}</div>
-      <div className="h-36 w-24 rounded-2xl border border-white/70 bg-gradient-to-b from-white to-slate-100 p-3 shadow-2xl">
+      <div className="text-[11px] uppercase tracking-[0.14em] text-slate-300">{label}</div>
+      <div className="h-36 w-24 rounded-xl border border-white/60 bg-gradient-to-b from-white to-slate-100 p-3 shadow-xl">
         {card ? (
           <div className={`flex h-full flex-col justify-between text-2xl font-bold ${cardColor(card)}`}>
             <span>{card.rank}</span>
@@ -97,19 +97,8 @@ function CardDisplay({ label, card }: { label: string; card: Card | null }) {
 
 function CardBack({ className = "" }: { className?: string }) {
   return (
-    <div
-      className={`h-20 w-14 rounded-lg border border-cyan-200/80 bg-gradient-to-b from-cyan-700 via-blue-900 to-indigo-950 shadow-2xl ${className}`}
-    >
-      <div className="grid h-full place-items-center text-[10px] font-bold tracking-[0.2em] text-cyan-50/90">WAR</div>
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4 backdrop-blur-xl">
-      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/85">{label}</div>
-      <div className="mt-2 text-3xl font-semibold text-cyan-50">{value}</div>
+    <div className={`h-20 w-14 rounded-md border border-cyan-100/70 bg-slate-900 ${className}`}>
+      <div className="grid h-full place-items-center text-[10px] font-semibold tracking-[0.2em] text-cyan-100">WAR</div>
     </div>
   );
 }
@@ -264,16 +253,16 @@ export default function Page() {
                 setWarPhase("idle");
                 setWarPayload(null);
                 setWarDownCount(0);
-              }, 2500);
+              }, 2200);
               warTimersRef.current.push(closeTimer);
-            }, 1200);
+            }, 1000);
             warTimersRef.current.push(revealDownTimer);
-          }, 1300);
+          }, 1200);
           warTimersRef.current.push(winnerTimer);
         }
-      }, 320);
+      }, 300);
       warTimersRef.current.push(dealInterval);
-    }, 700);
+    }, 600);
 
     warTimersRef.current.push(introTimer);
   }
@@ -336,9 +325,7 @@ export default function Page() {
     startWarCinematic(resolved);
   }
 
-  useEffect(() => {
-    return () => clearWarTimers();
-  }, []);
+  useEffect(() => () => clearWarTimers(), []);
 
   useEffect(() => {
     function startSynthMusic() {
@@ -448,10 +435,9 @@ export default function Page() {
       if (playAttempt) {
         void playAttempt
           .then(() => {
-            if (cancelled) {
-              return;
+            if (!cancelled) {
+              setAudioBackend("asset");
             }
-            setAudioBackend("asset");
           })
           .catch(onAssetError);
       } else {
@@ -495,28 +481,24 @@ export default function Page() {
 
   const quickBuyIns = [100, 250, 500, 1000, 2000];
   const quickAntes = [5, 10, 25, 50, 100, 200];
-
   const warWinnerText =
     warPayload?.outcome === "war_player_win"
       ? "YOU DEFEAT THE CHALLENGER"
       : warPayload?.outcome === "war_dealer_win"
         ? "THE CHALLENGER OVERPOWERS YOU"
         : "THE CLASH ENDS IN A PUSH";
-
   const warActive = warPhase !== "idle";
 
   return (
-    <main className="neo-shell min-h-screen w-full px-3 py-4 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
+    <main className="min-h-screen p-4 sm:p-6">
       {warActive && warPayload && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-b from-orange-900/95 via-amber-900/88 to-black/95" />
+        <div className="fixed inset-0 z-50 overflow-hidden bg-gradient-to-b from-orange-900/95 via-amber-900/90 to-black/95">
           <div className="absolute inset-0 arena-crowd" />
           <div className="absolute inset-0 arena-dust" />
-          <div className="absolute bottom-0 left-1/2 h-[46%] w-[120%] -translate-x-1/2 rounded-[50%] border border-amber-200/30 bg-gradient-to-b from-amber-700/35 to-yellow-900/20 shadow-[inset_0_0_180px_rgba(0,0,0,0.45)]" />
 
-          <div className="absolute left-1/2 top-7 -translate-x-1/2 text-center text-amber-100">
-            <div className="text-xs uppercase tracking-[0.32em] text-amber-200/85">Arena Of War</div>
-            <div className="mt-1 text-4xl font-bold tracking-[0.14em]">GLADIATOR DUEL</div>
+          <div className="absolute left-1/2 top-8 -translate-x-1/2 text-center text-amber-100">
+            <div className="text-xs uppercase tracking-[0.3em]">Arena Of War</div>
+            <div className="mt-1 text-3xl font-semibold">GLADIATOR DUEL</div>
             <div className="mt-2 text-sm text-amber-50/90">
               {warPhase === "intro" && "The crowd roars as the duel begins."}
               {warPhase === "deal_down" && "Three face-down cards are dealt to each fighter."}
@@ -527,7 +509,7 @@ export default function Page() {
           </div>
 
           <div className="absolute inset-x-0 top-[22%] text-center">
-            <div className="text-xs uppercase tracking-[0.24em] text-amber-100/80">Opponent</div>
+            <div className="text-xs uppercase tracking-[0.2em] text-amber-100/80">Opponent</div>
             <div className="mt-3 flex justify-center gap-2">
               {Array.from({ length: warDownCount }).map((_, index) => (
                 <CardBack key={`enemy-down-${index}`} className="-rotate-6" />
@@ -537,34 +519,14 @@ export default function Page() {
 
           <div className="absolute left-1/2 top-[48%] -translate-x-1/2">
             <div className="flex items-center gap-8">
-              <div className="h-44 w-28 rounded-xl border border-amber-100/70 bg-gradient-to-b from-white to-stone-100 p-3 shadow-2xl">
-                {warPhase === "reveal" || warPhase === "winner" || warPhase === "aftermath" ? (
-                  <div className={`flex h-full flex-col justify-between text-2xl font-bold ${cardColor(warPayload.warDealerCard)}`}>
-                    <span>{warPayload.warDealerCard.rank}</span>
-                    <span className="self-center text-3xl">{warPayload.warDealerCard.suit}</span>
-                    <span className="self-end">{warPayload.warDealerCard.rank}</span>
-                  </div>
-                ) : (
-                  <CardBack className="h-full w-full" />
-                )}
-              </div>
-              <div className="text-3xl font-bold text-amber-100 drop-shadow-[0_0_18px_rgba(251,191,36,0.65)]">VS</div>
-              <div className="h-44 w-28 rounded-xl border border-amber-100/70 bg-gradient-to-b from-white to-stone-100 p-3 shadow-2xl">
-                {warPhase === "reveal" || warPhase === "winner" || warPhase === "aftermath" ? (
-                  <div className={`flex h-full flex-col justify-between text-2xl font-bold ${cardColor(warPayload.warPlayerCard)}`}>
-                    <span>{warPayload.warPlayerCard.rank}</span>
-                    <span className="self-center text-3xl">{warPayload.warPlayerCard.suit}</span>
-                    <span className="self-end">{warPayload.warPlayerCard.rank}</span>
-                  </div>
-                ) : (
-                  <CardBack className="h-full w-full" />
-                )}
-              </div>
+              <CardDisplay label="Dealer" card={warPhase === "intro" || warPhase === "deal_down" ? null : warPayload.warDealerCard} />
+              <div className="text-2xl font-bold text-amber-100">VS</div>
+              <CardDisplay label="Player" card={warPhase === "intro" || warPhase === "deal_down" ? null : warPayload.warPlayerCard} />
             </div>
           </div>
 
           <div className="absolute inset-x-0 bottom-[18%] text-center">
-            <div className="text-xs uppercase tracking-[0.24em] text-amber-100/80">You</div>
+            <div className="text-xs uppercase tracking-[0.2em] text-amber-100/80">You</div>
             <div className="mt-3 flex justify-center gap-2">
               {Array.from({ length: warDownCount }).map((_, index) => (
                 <CardBack key={`player-down-${index}`} className="rotate-6" />
@@ -574,59 +536,28 @@ export default function Page() {
 
           {warPhase === "winner" && (
             <div className="absolute inset-x-0 top-[67%] text-center">
-              <span className="arena-banner rounded-full border border-amber-100/80 bg-black/35 px-8 py-3 text-2xl font-semibold tracking-[0.08em] text-amber-100">
+              <span className="arena-banner rounded-full border border-amber-100/80 bg-black/35 px-8 py-3 text-xl font-semibold text-amber-100">
                 {warWinnerText}
               </span>
             </div>
           )}
 
           {warPhase === "aftermath" && (
-            <div className="absolute bottom-4 left-1/2 w-[90%] max-w-5xl -translate-x-1/2 rounded-2xl border border-amber-100/40 bg-black/40 p-4 text-amber-100 backdrop-blur">
-              <div className="text-xs uppercase tracking-[0.18em] text-amber-200/85">Face-down cards revealed</div>
-              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <div className="mb-2 text-xs uppercase tracking-[0.14em] text-amber-100/75">Opponent hidden cards</div>
-                  <div className="flex gap-2">
-                    {warPayload.burnDealer.map((card, index) => (
-                      <div key={`reveal-dealer-${index}`} className="h-20 w-14 rounded-md border border-amber-100/65 bg-white p-2 shadow-lg">
-                        <div className={`flex h-full flex-col justify-between text-sm font-bold ${cardColor(card)}`}>
-                          <span>{card.rank}</span>
-                          <span className="self-end">{card.suit}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="mb-2 text-xs uppercase tracking-[0.14em] text-amber-100/75">Your hidden cards</div>
-                  <div className="flex gap-2">
-                    {warPayload.burnPlayer.map((card, index) => (
-                      <div key={`reveal-player-${index}`} className="h-20 w-14 rounded-md border border-amber-100/65 bg-white p-2 shadow-lg">
-                        <div className={`flex h-full flex-col justify-between text-sm font-bold ${cardColor(card)}`}>
-                          <span>{card.rank}</span>
-                          <span className="self-end">{card.suit}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+            <div className="absolute bottom-4 left-1/2 w-[92%] max-w-4xl -translate-x-1/2 rounded-2xl border border-amber-100/35 bg-black/45 p-4 text-amber-100 backdrop-blur">
+              <div className="text-xs uppercase tracking-[0.16em]">Face-down cards revealed</div>
+              <div className="mt-2 text-sm">Opponent: {warPayload.burnDealer.map(cardText).join(" ")}</div>
+              <div className="text-sm">Player: {warPayload.burnPlayer.map(cardText).join(" ")}</div>
             </div>
           )}
         </div>
       )}
 
-      <div className={`neo-table felt-${feltTheme} relative mx-auto w-full max-w-7xl overflow-hidden rounded-[2rem] border border-cyan-300/30 p-4 shadow-[0_40px_120px_rgba(0,0,0,0.6)] sm:p-6 lg:p-8`}>
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(56,189,248,0.16),transparent_36%),radial-gradient(circle_at_80%_0%,rgba(6,182,212,0.2),transparent_38%),radial-gradient(circle_at_50%_100%,rgba(14,165,233,0.16),transparent_50%)]" />
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.09)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.07)_1px,transparent_1px)] bg-[size:26px_26px] opacity-20" />
-
-        <header className="relative z-10 flex flex-wrap items-start justify-between gap-4">
+      <div className={`minimal-table felt-${feltTheme} mx-auto w-full max-w-4xl rounded-2xl border border-white/15 p-5 sm:p-6`}>
+        <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.3em] text-cyan-200/80">Neobank Arena</div>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-50 sm:text-4xl">Casino War Pro Table</h1>
-            <p className="mt-2 text-sm text-slate-300/90">Buy in, place ante, deal fast. Tie gives Surrender or Go To War.</p>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-300">Casino War</div>
+            <h1 className="mt-1 text-2xl font-semibold text-white">Minimal Table</h1>
           </div>
-
           {state && (
             <button
               type="button"
@@ -636,7 +567,7 @@ export default function Page() {
                 setWarResult(null);
                 setResult({ title: "Table closed", tone: "amber" });
               }}
-              className="rounded-full border border-rose-200/50 bg-rose-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-rose-100 transition hover:bg-rose-500/20"
+              className="rounded-lg border border-rose-300/50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-rose-100"
             >
               Cash Out
             </button>
@@ -644,32 +575,32 @@ export default function Page() {
         </header>
 
         {!state ? (
-          <section className="relative z-10 mt-8 rounded-3xl border border-white/10 bg-slate-950/45 p-6 backdrop-blur-xl">
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-300/90">Buy In</div>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
+          <section className="space-y-3 rounded-xl border border-white/10 bg-black/25 p-4">
+            <div className="text-xs uppercase tracking-[0.16em] text-slate-300">Buy In</div>
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 type="number"
                 min={50}
                 step={25}
                 value={buyIn}
                 onChange={(event) => setBuyIn(Number(event.target.value))}
-                className="w-44 rounded-xl border border-cyan-200/20 bg-slate-900/65 px-3 py-2 text-sm text-cyan-50 outline-none ring-cyan-300/30 transition focus:ring"
+                className="w-44 rounded-lg border border-white/15 bg-black/35 px-3 py-2 text-sm text-white outline-none"
               />
               <button
                 type="button"
                 onClick={handleBuyIn}
-                className="rounded-xl border border-cyan-200/50 bg-gradient-to-b from-cyan-300 to-blue-500 px-6 py-2.5 text-sm font-bold uppercase tracking-[0.12em] text-slate-950 transition hover:brightness-110"
+                className="rounded-lg border border-cyan-200/55 bg-cyan-300/90 px-4 py-2 text-sm font-bold text-slate-900"
               >
-                Enter Table
+                Enter
               </button>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2">
               {quickBuyIns.map((chip) => (
                 <button
                   key={chip}
                   type="button"
                   onClick={() => setBuyIn(chip)}
-                  className="rounded-full border border-cyan-200/30 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-400/20"
+                  className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-xs text-slate-200"
                 >
                   ${chip}
                 </button>
@@ -678,42 +609,29 @@ export default function Page() {
           </section>
         ) : (
           <>
-            <section className="relative z-10 mt-6 grid grid-cols-1 gap-3 md:grid-cols-4">
-              <StatCard label="Bankroll" value={`$${state.bankroll}`} />
-              <StatCard label="Hand" value={state.handNumber} />
-              <StatCard label="Ante" value={`$${clampAnte(ante)}`} />
-              <StatCard label="Shoe Remaining" value={state.shoe.length} />
+            <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="minimal-stat">Bankroll <strong>${state.bankroll}</strong></div>
+              <div className="minimal-stat">Hand <strong>{state.handNumber}</strong></div>
+              <div className="minimal-stat">Ante <strong>${clampAnte(ante)}</strong></div>
+              <div className="minimal-stat">Shoe <strong>{state.shoe.length}</strong></div>
             </section>
 
-            {result && (
-              <div className={`relative z-10 mt-4 rounded-2xl border px-4 py-3 text-center text-sm font-semibold backdrop-blur ${toneClass(result.tone)}`}>
-                {result.title}
-              </div>
-            )}
+            {result && <div className={`mt-4 rounded-lg border px-3 py-2 text-sm ${toneClass(result.tone)}`}>{result.title}</div>}
 
-            <section className="relative z-10 mt-5 rounded-3xl border border-white/10 bg-slate-950/45 p-5 backdrop-blur-xl">
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <CardDisplay label="Player" card={state.playerCard} />
-                <CardDisplay label="Dealer" card={state.dealerCard} />
-              </div>
-
+            <section className="mt-4 grid grid-cols-1 gap-4 rounded-xl border border-white/10 bg-black/25 p-4 sm:grid-cols-2">
+              <CardDisplay label="Player" card={state.playerCard} />
+              <CardDisplay label="Dealer" card={state.dealerCard} />
               {warResult && !warActive && (
-                <div className="mt-5 rounded-2xl border border-cyan-200/20 bg-cyan-500/10 p-4 text-cyan-50">
-                  <div className="text-xs uppercase tracking-[0.16em] text-cyan-100/80">War Summary</div>
-                  <div className="mt-2 text-sm font-semibold">
-                    Final: Player {cardText(warResult.warPlayerCard)} vs Dealer {cardText(warResult.warDealerCard)}
-                  </div>
-                  <div className="mt-1 text-sm">Hidden player cards: {warResult.burnPlayer.map(cardText).join(" ")}</div>
-                  <div className="text-sm">Hidden dealer cards: {warResult.burnDealer.map(cardText).join(" ")}</div>
+                <div className="sm:col-span-2 rounded-lg border border-cyan-200/20 bg-cyan-500/10 p-3 text-sm text-cyan-100">
+                  Final: Player {cardText(warResult.warPlayerCard)} vs Dealer {cardText(warResult.warDealerCard)}
                 </div>
               )}
             </section>
 
-            <section className="relative z-10 mt-5 rounded-3xl border border-white/10 bg-slate-950/45 p-5 backdrop-blur-xl">
-              <div className="text-xs uppercase tracking-[0.18em] text-slate-300/90">Wager Controls</div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <label className="text-sm text-slate-100">Ante:</label>
+            <section className="mt-4 space-y-3 rounded-xl border border-white/10 bg-black/25 p-4">
+              <div className="text-xs uppercase tracking-[0.16em] text-slate-300">Wager</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-sm text-slate-200">Ante</label>
                 <input
                   type="number"
                   min={limits.min}
@@ -721,18 +639,18 @@ export default function Page() {
                   step={5}
                   value={ante}
                   onChange={(event) => setAnte(Number(event.target.value))}
-                  className="w-28 rounded-xl border border-cyan-200/20 bg-slate-900/65 px-3 py-2 text-sm text-cyan-50 outline-none ring-cyan-300/30 transition focus:ring"
+                  className="w-28 rounded-lg border border-white/15 bg-black/35 px-3 py-2 text-sm text-white outline-none"
                 />
-                <div className="text-xs text-slate-300/80">Table limits ${limits.min}-${limits.max}</div>
+                <span className="text-xs text-slate-300">limits ${limits.min}-${limits.max}</span>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
                 {quickAntes.map((chip) => (
                   <button
                     key={chip}
                     type="button"
                     onClick={() => setAnte(chip)}
-                    className="rounded-full border border-cyan-200/30 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-400/20"
+                    className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-xs text-slate-200"
                   >
                     ${chip}
                   </button>
@@ -740,36 +658,36 @@ export default function Page() {
               </div>
 
               {state.phase === "ready" ? (
-                <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={handleDeal}
                     disabled={!canPlaceAnte(state, clampAnte(ante)) || warActive}
-                    className="rounded-xl border border-cyan-200/60 bg-gradient-to-b from-cyan-300 to-blue-500 px-6 py-2.5 text-sm font-bold uppercase tracking-[0.1em] text-slate-950 shadow-lg transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+                    className="rounded-lg border border-cyan-200/55 bg-cyan-300/90 px-4 py-2 text-sm font-bold text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Deal Hand
                   </button>
-                  <div className="text-sm text-slate-200/95">Wager ${clampAnte(ante)} on Ante</div>
+                  <span className="text-sm text-slate-200">Wager ${clampAnte(ante)}</span>
                 </div>
               ) : (
-                <div className="mt-4 rounded-2xl border border-violet-200/30 bg-violet-500/10 p-4">
-                  <div className="text-sm font-semibold text-violet-100">Tie hand. Choose your option:</div>
-                  <div className="mt-3 flex flex-wrap gap-3">
+                <div className="rounded-lg border border-violet-300/35 bg-violet-500/10 p-3">
+                  <div className="text-sm font-semibold text-violet-100">Tie hand</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={handleSurrender}
                       disabled={warActive}
-                      className="rounded-xl border border-violet-200/50 bg-black/25 px-5 py-2 text-sm font-semibold text-violet-100 disabled:opacity-45"
+                      className="rounded-lg border border-violet-200/55 px-4 py-2 text-sm text-violet-100 disabled:opacity-45"
                     >
-                      Surrender (lose half ante)
+                      Surrender
                     </button>
                     <button
                       type="button"
                       onClick={handleGoToWar}
                       disabled={!canGoToWar(state) || warActive}
-                      className="rounded-xl border border-cyan-200/60 bg-gradient-to-b from-cyan-300 to-blue-500 px-5 py-2 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-45"
+                      className="rounded-lg border border-cyan-200/55 bg-cyan-300/90 px-4 py-2 text-sm font-bold text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      Go To War (match ${state.ante})
+                      Go To War (${state.ante})
                     </button>
                   </div>
                 </div>
@@ -778,47 +696,45 @@ export default function Page() {
           </>
         )}
 
-        <section className="relative z-10 mt-5 rounded-3xl border border-white/10 bg-slate-950/45 p-4 backdrop-blur-xl">
-          <div className="text-xs uppercase tracking-[0.18em] text-slate-300/90">Dealer Log</div>
-          <div className="mt-2 max-h-48 space-y-1 overflow-y-auto text-sm text-slate-100/95">
-            {events.map((event, index) => (
-              <div key={`${event}-${index}`} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
-                {event}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="relative z-10 mt-5 rounded-3xl border border-white/10 bg-slate-950/45 p-4 backdrop-blur-xl">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-300/90">Felt Color</div>
-            <div className="flex flex-wrap items-center gap-2">
-              {FELT_THEME_BUTTONS.map((theme) => (
-                <button
-                  key={theme.id}
-                  type="button"
-                  onClick={() => setFeltTheme(theme.id)}
-                  className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] transition ${
-                    feltTheme === theme.id
-                      ? "border-cyan-100/95 bg-cyan-300/30 text-cyan-50"
-                      : "border-cyan-100/35 bg-black/25 text-cyan-100/90 hover:bg-black/35"
-                  }`}
-                >
-                  {theme.label}
-                </button>
+        <section className="mt-4 rounded-xl border border-white/10 bg-black/25 p-4">
+          <details open>
+            <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-slate-300">Dealer Log</summary>
+            <div className="mt-2 max-h-40 space-y-1 overflow-y-auto text-sm text-slate-200">
+              {events.map((event, index) => (
+                <div key={`${event}-${index}`} className="rounded bg-white/5 px-2 py-1">
+                  {event}
+                </div>
               ))}
             </div>
+          </details>
+        </section>
+
+        <section className="mt-4 rounded-xl border border-white/10 bg-black/25 p-4">
+          <div className="text-xs uppercase tracking-[0.16em] text-slate-300">Preferences</div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {FELT_THEME_BUTTONS.map((theme) => (
+              <button
+                key={theme.id}
+                type="button"
+                onClick={() => setFeltTheme(theme.id)}
+                className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] ${
+                  feltTheme === theme.id
+                    ? "border-cyan-100/85 bg-cyan-300/20 text-cyan-100"
+                    : "border-white/20 bg-white/5 text-slate-200"
+                }`}
+              >
+                {theme.label}
+              </button>
+            ))}
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-white/10 pt-3">
-            <div className="text-xs uppercase tracking-[0.14em] text-slate-300/90">Table Music</div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
             <button
               type="button"
               onClick={() => setMusicOn((previous) => !previous)}
-              className={`rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] transition ${
-                musicOn
-                  ? "border-cyan-200/80 bg-cyan-300/20 text-cyan-100"
-                  : "border-slate-200/25 bg-black/20 text-slate-200"
+              className={`rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] ${
+                musicOn ? "border-cyan-200/75 bg-cyan-300/15 text-cyan-100" : "border-white/20 bg-white/5 text-slate-200"
               }`}
             >
               {musicOn ? "Music On" : "Music Off"}
@@ -833,10 +749,10 @@ export default function Page() {
               className="h-1.5 w-36 cursor-pointer accent-cyan-300"
               aria-label="Music volume"
             />
-            <div className="text-xs text-slate-300/90">{musicVolume}%</div>
-            <div className="text-[11px] uppercase tracking-[0.12em] text-cyan-200/80">
-              Audio: {audioBackend === "asset" ? "Asset Pack" : "Synth Fallback"}
-            </div>
+            <span className="text-xs text-slate-300">{musicVolume}%</span>
+            <span className="text-[11px] uppercase tracking-[0.12em] text-cyan-200/80">
+              {audioBackend === "asset" ? "Asset" : "Synth"}
+            </span>
           </div>
         </section>
       </div>
