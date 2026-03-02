@@ -1,121 +1,85 @@
 "use client";
 
-import { useEffect, useReducer, useRef, useState } from "react";
-import { Card, GameState, PlayerId, createInitialGameState, playRound } from "@/lib/war";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Card,
+  CasinoWarState,
+  DealResult,
+  WarResult,
+  canGoToWar,
+  canPlaceAnte,
+  clampAnte,
+  createCasinoWarState,
+  dealHand,
+  goToWar,
+  surrender,
+  tableLimits
+} from "@/lib/casinoWar";
 
-type RoundOutcome = "none" | "player" | "computer" | "war" | "player_game" | "computer_game";
-type FeltTheme = "emerald" | "royal" | "crimson";
-
-type UiState = {
-  game: GameState;
-  log: string[];
-  autoPlay: boolean;
-  hasStarted: boolean;
-  lastPileCount: number;
-  lastOutcome: RoundOutcome;
-  lastMessage: string;
+type ResolvedHand = {
+  title: string;
+  tone: "emerald" | "red" | "amber";
 };
 
-type Action =
-  | { type: "DEAL" }
-  | { type: "TOGGLE_AUTOPLAY" }
-  | { type: "NEW_GAME" };
+type WarCinematicPhase = "idle" | "intro" | "deal_down" | "reveal" | "winner" | "aftermath";
 
-const MAX_LOG = 20;
-const AUTO_PLAY_MS = 500;
+const LOG_LIMIT = 24;
 
-function createUiState(): UiState {
-  return {
-    game: createInitialGameState(),
-    log: ["New game ready. Press Start Deal to begin."],
-    autoPlay: false,
-    hasStarted: false,
-    lastPileCount: 0,
-    lastOutcome: "none",
-    lastMessage: "Waiting for first deal"
-  };
+function cardText(card: Card | null): string {
+  return card ? `${card.rank}${card.suit}` : "--";
 }
 
-function reduceLog(current: string[], additions: string[]): string[] {
-  return [...additions, ...current].slice(0, MAX_LOG);
+function cardColor(card: Card | null): string {
+  if (!card) {
+    return "text-slate-400";
+  }
+  return card.suit === "♥" || card.suit === "♦" ? "text-red-700" : "text-slate-800";
 }
 
-function inferOutcome(events: string[], winner: PlayerId | null): { outcome: RoundOutcome; message: string } {
-  const war = events.some((event) => event.includes("WAR!"));
-
-  if (winner === "player") {
-    return { outcome: "player_game", message: "You win the game" };
+function toneClass(tone: ResolvedHand["tone"]): string {
+  if (tone === "emerald") {
+    return "border-emerald-300/75 bg-emerald-500/25 text-emerald-100";
   }
-  if (winner === "computer") {
-    return { outcome: "computer_game", message: "Computer wins the game" };
+  if (tone === "red") {
+    return "border-rose-300/75 bg-rose-600/25 text-rose-100";
   }
-
-  if (events.some((event) => event.startsWith("PLAYER wins"))) {
-    return { outcome: "player", message: "You take the deal" };
-  }
-  if (events.some((event) => event.startsWith("COMPUTER wins"))) {
-    return { outcome: "computer", message: "Computer takes the deal" };
-  }
-
-  if (war) {
-    return { outcome: "war", message: "WAR triggered" };
-  }
-
-  return { outcome: "none", message: "Deal complete" };
+  return "border-amber-300/75 bg-amber-500/25 text-amber-100";
 }
 
-function reducer(state: UiState, action: Action): UiState {
-  switch (action.type) {
-    case "NEW_GAME":
-      return createUiState();
-    case "TOGGLE_AUTOPLAY":
-      if (state.game.winner || !state.hasStarted) {
-        return state;
-      }
-      return { ...state, autoPlay: !state.autoPlay };
-    case "DEAL": {
-      if (state.game.winner) {
-        return { ...state, autoPlay: false };
-      }
-
-      const result = playRound(state.game);
-      const nextAuto = result.state.winner ? false : state.autoPlay;
-      const outcome = inferOutcome(result.events, result.state.winner);
-
-      return {
-        game: result.state,
-        log: reduceLog(state.log, result.events),
-        autoPlay: nextAuto,
-        hasStarted: true,
-        lastPileCount: result.pileCount,
-        lastOutcome: outcome.outcome,
-        lastMessage: outcome.message
-      };
-    }
+function eventTitle(result: DealResult | WarResult): ResolvedHand {
+  switch (result.outcome) {
+    case "player_win":
+      return { title: "Player wins hand", tone: "emerald" };
+    case "dealer_win":
+      return { title: "Dealer wins hand", tone: "red" };
+    case "war_offered":
+      return { title: "WAR offered", tone: "amber" };
+    case "war_player_win":
+      return { title: "Player wins WAR", tone: "emerald" };
+    case "war_dealer_win":
+      return { title: "Dealer wins WAR", tone: "red" };
+    case "war_push":
+      return { title: "WAR push", tone: "amber" };
+    case "surrender":
+      return { title: "Player surrender", tone: "amber" };
     default:
-      return state;
+      return { title: "Hand complete", tone: "amber" };
   }
 }
 
-function CardView({ card, label }: { card: Card | null; label: string }) {
-  const isRed = card ? card.suit === "♥" || card.suit === "♦" : false;
-
+function CardDisplay({ label, card }: { label: string; card: Card | null }) {
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div className="text-xs uppercase tracking-[0.2em] text-emerald-100/80">{label}</div>
-      <div className="h-40 w-28 rounded-xl border border-amber-100/70 bg-gradient-to-b from-white to-stone-100 p-3 shadow-2xl transition duration-300">
+    <div className="flex flex-col items-center gap-2">
+      <div className="text-xs uppercase tracking-[0.18em] text-amber-100/85">{label}</div>
+      <div className="h-36 w-24 rounded-xl border border-amber-100/65 bg-gradient-to-b from-white to-stone-100 p-3 shadow-2xl">
         {card ? (
-          <div
-            className={`flex h-full flex-col justify-between text-2xl font-bold ${
-              isRed ? "text-red-700" : "text-slate-800"
-            }`}
-          >
+          <div className={`flex h-full flex-col justify-between text-2xl font-bold ${cardColor(card)}`}>
             <span>{card.rank}</span>
             <span className="self-center text-3xl">{card.suit}</span>
             <span className="self-end">{card.rank}</span>
           </div>
         ) : (
-          <div className="grid h-full place-items-center rounded-lg border border-dashed border-slate-300 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <div className="grid h-full place-items-center rounded-lg border border-dashed border-slate-300 text-xs uppercase tracking-[0.12em] text-slate-400">
             Waiting
           </div>
         )}
@@ -124,540 +88,491 @@ function CardView({ card, label }: { card: Card | null; label: string }) {
   );
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
+function CardBack({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`h-20 w-14 rounded-md border border-amber-100/70 bg-gradient-to-b from-indigo-700 to-indigo-950 shadow-2xl ${className}`}
+    >
+      <div className="grid h-full place-items-center text-xs font-bold tracking-[0.18em] text-amber-100/85">WAR</div>
+    </div>
+  );
 }
 
-const FELT_THEME_BUTTONS: Array<{ id: FeltTheme; label: string }> = [
-  { id: "emerald", label: "Emerald" },
-  { id: "royal", label: "Royal" },
-  { id: "crimson", label: "Crimson" }
-];
-
 export default function Page() {
-  const [state, dispatch] = useReducer(reducer, undefined, createUiState);
-  const [rulesOpen, setRulesOpen] = useState(false);
-  const [feltTheme, setFeltTheme] = useState<FeltTheme>("emerald");
+  const limits = useMemo(() => tableLimits(), []);
+  const [buyIn, setBuyIn] = useState(500);
+  const [ante, setAnte] = useState(25);
+  const [state, setState] = useState<CasinoWarState | null>(null);
+  const [events, setEvents] = useState<string[]>(["Welcome to Casino War. Buy in to begin."]);
+  const [result, setResult] = useState<ResolvedHand | null>(null);
+  const [warResult, setWarResult] = useState<WarResult | null>(null);
 
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [notesPosition, setNotesPosition] = useState({ x: 28, y: 120 });
-  const dragRef = useRef<{ active: boolean; offsetX: number; offsetY: number }>({
-    active: false,
-    offsetX: 0,
-    offsetY: 0
-  });
-
-  const [musicOn, setMusicOn] = useState(false);
-  const [musicVolume, setMusicVolume] = useState(55);
-  const musicContextRef = useRef<AudioContext | null>(null);
-  const musicTimerRef = useRef<number | null>(null);
-  const musicGainRef = useRef<GainNode | null>(null);
-  const musicStepRef = useRef(0);
-
+  const [warPhase, setWarPhase] = useState<WarCinematicPhase>("idle");
+  const [warDownCount, setWarDownCount] = useState(0);
+  const [warPayload, setWarPayload] = useState<WarResult | null>(null);
+  const warTimersRef = useRef<number[]>([]);
   const sfxContextRef = useRef<AudioContext | null>(null);
-  const prevRoundRef = useRef(0);
-  const [burst, setBurst] = useState<{ text: string; tone: "gold" | "emerald" | "red" } | null>(null);
 
-  useEffect(() => {
-    if (!state.autoPlay || state.game.winner) {
-      return;
+  function addEvents(next: string[]) {
+    setEvents((current) => [...next, ...current].slice(0, LOG_LIMIT));
+  }
+
+  function clearWarTimers() {
+    for (const timerId of warTimersRef.current) {
+      window.clearTimeout(timerId);
+      window.clearInterval(timerId);
     }
+    warTimersRef.current = [];
+  }
 
-    const interval = window.setInterval(() => {
-      dispatch({ type: "DEAL" });
-    }, AUTO_PLAY_MS);
-
-    return () => window.clearInterval(interval);
-  }, [state.autoPlay, state.game.winner]);
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.code !== "Space") {
-        return;
-      }
-
-      const target = event.target as HTMLElement | null;
-      if (target && ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target.tagName)) {
-        return;
-      }
-
-      event.preventDefault();
-      dispatch({ type: "DEAL" });
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
-  useEffect(() => {
-    const blockedMessage = "Cannot assign to read only property 'solana'";
-
-    function shouldBlock(message: string | undefined): boolean {
-      return Boolean(message && message.includes(blockedMessage));
-    }
-
-    function onError(event: ErrorEvent): void {
-      if (shouldBlock(event.message)) {
-        event.preventDefault();
-      }
-    }
-
-    function onRejection(event: PromiseRejectionEvent): void {
-      const reasonMessage =
-        typeof event.reason === "string"
-          ? event.reason
-          : event.reason instanceof Error
-            ? event.reason.message
-            : undefined;
-
-      if (shouldBlock(reasonMessage)) {
-        event.preventDefault();
-      }
-    }
-
-    window.addEventListener("error", onError);
-    window.addEventListener("unhandledrejection", onRejection);
-
-    return () => {
-      window.removeEventListener("error", onError);
-      window.removeEventListener("unhandledrejection", onRejection);
-    };
-  }, []);
-
-  useEffect(() => {
-    function onMouseMove(event: MouseEvent) {
-      if (!dragRef.current.active) {
-        return;
-      }
-
-      const panelWidth = 320;
-      const panelHeight = 340;
-      const x = clamp(event.clientX - dragRef.current.offsetX, 10, window.innerWidth - panelWidth - 10);
-      const y = clamp(event.clientY - dragRef.current.offsetY, 10, window.innerHeight - panelHeight - 10);
-      setNotesPosition({ x, y });
-    }
-
-    function onMouseUp() {
-      dragRef.current.active = false;
-    }
-
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-
-    return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-  }, []);
-
-  useEffect(() => {
-    function stopMusic(): void {
-      if (musicTimerRef.current !== null) {
-        window.clearInterval(musicTimerRef.current);
-        musicTimerRef.current = null;
-      }
-      if (musicContextRef.current) {
-        void musicContextRef.current.close();
-        musicContextRef.current = null;
-      }
-      musicGainRef.current = null;
-    }
-
-    if (!musicOn) {
-      stopMusic();
-      return;
-    }
-
+  function sfx(frequency: number, duration: number, volume: number, type: OscillatorType = "triangle", delay = 0) {
     const AudioContextClass = window.AudioContext;
     if (!AudioContextClass) {
       return;
     }
 
-    const context = new AudioContextClass();
-    musicContextRef.current = context;
+    const context = sfxContextRef.current ?? new AudioContextClass();
+    sfxContextRef.current = context;
 
-    const lowpass = context.createBiquadFilter();
-    lowpass.type = "lowpass";
-    lowpass.frequency.setValueAtTime(1200, context.currentTime);
+    const start = context.currentTime + delay;
+    const osc = context.createOscillator();
+    const gain = context.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(volume, start + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    osc.connect(gain);
+    gain.connect(context.destination);
+    osc.start(start);
+    osc.stop(start + duration + 0.02);
+  }
 
-    const masterGain = context.createGain();
-    masterGain.gain.value = 0.36 * (musicVolume / 100);
+  function startWarCinematic(payload: WarResult) {
+    clearWarTimers();
+    setWarPayload(payload);
+    setWarDownCount(0);
+    setWarPhase("intro");
 
-    lowpass.connect(masterGain);
-    masterGain.connect(context.destination);
+    sfx(120, 0.45, 0.18, "sawtooth");
+    sfx(168, 0.42, 0.14, "triangle", 0.06);
 
-    musicGainRef.current = masterGain;
-    musicStepRef.current = 0;
+    const introTimer = window.setTimeout(() => {
+      setWarPhase("deal_down");
 
-    const progression = [130.81, 110.0, 146.83, 98.0]; // C3, A2, D3, G2
-    const topLine = [392.0, 440.0, 493.88, 523.25, 493.88, 440.0, 392.0, 349.23];
+      let placed = 0;
+      const dealInterval = window.setInterval(() => {
+        placed += 1;
+        setWarDownCount(Math.min(placed, 3));
+        sfx(placed % 2 === 0 ? 190 : 160, 0.12, 0.12);
 
-    function playTone(
-      frequency: number,
-      start: number,
-      duration: number,
-      type: OscillatorType,
-      volume: number
-    ) {
-      const osc = context.createOscillator();
-      const gain = context.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(frequency, start);
-      gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(volume, start + 0.06);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-      osc.connect(gain);
-      gain.connect(lowpass);
-      osc.start(start);
-      osc.stop(start + duration + 0.04);
-    }
+        if (placed >= 3) {
+          window.clearInterval(dealInterval);
+          setWarPhase("reveal");
+          sfx(420, 0.2, 0.15);
+          sfx(520, 0.22, 0.13, "triangle", 0.08);
 
-    function tick() {
-      const now = context.currentTime;
-      const step = musicStepRef.current;
-      const root = progression[Math.floor(step / 2) % progression.length];
+          const winnerTimer = window.setTimeout(() => {
+            setWarPhase("winner");
+            if (payload.outcome === "war_player_win") {
+              sfx(440, 0.2, 0.13);
+              sfx(554, 0.2, 0.13, "triangle", 0.08);
+              sfx(660, 0.24, 0.14, "triangle", 0.18);
+            } else if (payload.outcome === "war_dealer_win") {
+              sfx(330, 0.22, 0.13);
+              sfx(247, 0.24, 0.13, "triangle", 0.1);
+            } else {
+              sfx(392, 0.2, 0.11);
+              sfx(440, 0.2, 0.11, "triangle", 0.1);
+            }
 
-      // Soft chord bed.
-      playTone(root, now, 1.4, "triangle", 0.18);
-      playTone(root * 1.26, now + 0.02, 1.35, "triangle", 0.13);
-      playTone(root * 1.5, now + 0.03, 1.3, "sine", 0.12);
+            const revealDownTimer = window.setTimeout(() => {
+              setWarPhase("aftermath");
 
-      // Walking bass pulse.
-      playTone(root / 2, now + 0.05, 0.45, "sine", 0.22);
+              const closeTimer = window.setTimeout(() => {
+                setWarPhase("idle");
+                setWarPayload(null);
+                setWarDownCount(0);
+              }, 2500);
+              warTimersRef.current.push(closeTimer);
+            }, 1200);
+            warTimersRef.current.push(revealDownTimer);
+          }, 1300);
+          warTimersRef.current.push(winnerTimer);
+        }
+      }, 320);
+      warTimersRef.current.push(dealInterval);
+    }, 700);
 
-      // Clean melody tone.
-      if (step % 2 === 1) {
-        playTone(topLine[step % topLine.length], now + 0.14, 0.35, "sine", 0.11);
-      }
+    warTimersRef.current.push(introTimer);
+  }
 
-      musicStepRef.current += 1;
-    }
+  function handleBuyIn() {
+    const session = createCasinoWarState(Math.max(50, Math.floor(buyIn)));
+    setState(session);
+    setWarResult(null);
+    setResult({ title: `Bought in for $${session.bankroll}`, tone: "amber" });
+    addEvents([`Bought in for $${session.bankroll}. Table limits $${limits.min}-$${limits.max}.`]);
+  }
 
-    void context.resume();
-    tick();
-    musicTimerRef.current = window.setInterval(tick, 900);
-
-    return () => stopMusic();
-  }, [musicOn, musicVolume]);
-
-  useEffect(() => {
-    if (musicGainRef.current && musicContextRef.current) {
-      musicGainRef.current.gain.setValueAtTime(
-        0.36 * (musicVolume / 100),
-        musicContextRef.current.currentTime
-      );
-    }
-  }, [musicVolume]);
-
-  useEffect(() => {
-    if (state.game.round === 0 || prevRoundRef.current === state.game.round) {
+  function handleDeal() {
+    if (!state || warPhase !== "idle") {
       return;
     }
 
-    prevRoundRef.current = state.game.round;
-
-    let nextBurst: { text: string; tone: "gold" | "emerald" | "red" } | null = null;
-    if (state.lastOutcome === "player" || state.lastOutcome === "player_game") {
-      nextBurst = { text: "You Win The Deal", tone: "emerald" };
-    } else if (state.lastOutcome === "computer" || state.lastOutcome === "computer_game") {
-      nextBurst = { text: "Computer Wins Deal", tone: "red" };
-    } else if (state.lastOutcome === "war") {
-      nextBurst = { text: "WAR!", tone: "gold" };
-    } else {
-      nextBurst = { text: "Deal", tone: "gold" };
+    const wager = clampAnte(ante);
+    if (!canPlaceAnte(state, wager)) {
+      setResult({ title: "Ante invalid for bankroll", tone: "red" });
+      addEvents([`Cannot deal: ante $${wager} outside limits or exceeds bankroll.`]);
+      return;
     }
 
-    setBurst(nextBurst);
-    const timer = window.setTimeout(() => setBurst(null), 900);
+    const dealt = dealHand(state, wager);
+    setState(dealt.state);
+    setWarResult(null);
+    setResult(eventTitle(dealt));
+    addEvents(dealt.events);
+  }
 
-    const AudioContextClass = window.AudioContext;
-    if (AudioContextClass) {
-      const context = sfxContextRef.current ?? new AudioContextClass();
-      sfxContextRef.current = context;
-
-      function tone(frequency: number, duration: number, volume: number, delay = 0) {
-        const start = context.currentTime + delay;
-        const osc = context.createOscillator();
-        const gain = context.createGain();
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(frequency, start);
-        gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.exponentialRampToValueAtTime(volume, start + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-        osc.connect(gain);
-        gain.connect(context.destination);
-        osc.start(start);
-        osc.stop(start + duration + 0.02);
-      }
-
-      if (state.lastOutcome === "player" || state.lastOutcome === "player_game") {
-        tone(440, 0.2, 0.1);
-        tone(554.37, 0.2, 0.1, 0.09);
-        tone(659.25, 0.24, 0.11, 0.18);
-      } else if (state.lastOutcome === "computer" || state.lastOutcome === "computer_game") {
-        tone(440, 0.2, 0.08);
-        tone(349.23, 0.2, 0.08, 0.08);
-        tone(293.66, 0.25, 0.09, 0.16);
-      } else if (state.lastOutcome === "war") {
-        tone(220, 0.14, 0.09);
-        tone(220, 0.14, 0.09, 0.12);
-      }
+  function handleSurrender() {
+    if (!state || state.phase !== "awaiting_war_choice" || warPhase !== "idle") {
+      return;
     }
 
-    return () => window.clearTimeout(timer);
-  }, [state.game.round, state.lastOutcome]);
+    const resolved = surrender(state);
+    setState(resolved.state);
+    setWarResult(null);
+    setResult(eventTitle(resolved));
+    addEvents(resolved.events);
+  }
 
-  const statusToneClass =
-    burst?.tone === "emerald"
-      ? "border-emerald-200/90 bg-emerald-500/30 text-emerald-100"
-      : burst?.tone === "red"
-        ? "border-rose-200/90 bg-rose-600/30 text-rose-100"
-        : "border-amber-200/90 bg-amber-500/30 text-amber-100";
+  function handleGoToWar() {
+    if (!state || state.phase !== "awaiting_war_choice" || warPhase !== "idle") {
+      return;
+    }
+
+    if (!canGoToWar(state)) {
+      setResult({ title: "Insufficient bankroll for war bet", tone: "red" });
+      addEvents(["Cannot go to war: bankroll is less than required war bet."]);
+      return;
+    }
+
+    const resolved = goToWar(state);
+    setState(resolved.state);
+    setWarResult(resolved);
+    setResult(eventTitle(resolved));
+    addEvents(resolved.events);
+    startWarCinematic(resolved);
+  }
+
+  useEffect(() => {
+    return () => clearWarTimers();
+  }, []);
+
+  const quickBuyIns = [100, 250, 500, 1000, 2000];
+  const quickAntes = [5, 10, 25, 50, 100, 200];
+
+  const warWinnerText =
+    warPayload?.outcome === "war_player_win"
+      ? "YOU DEFEAT THE CHALLENGER"
+      : warPayload?.outcome === "war_dealer_win"
+        ? "THE CHALLENGER OVERPOWERS YOU"
+        : "THE CLASH ENDS IN A PUSH";
+
+  const warActive = warPhase !== "idle";
 
   return (
     <main className="min-h-screen w-full p-3 sm:p-6 lg:p-8">
-      <div
-        className={`casino-felt felt-${feltTheme} relative mx-auto flex min-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-amber-200/40 px-4 py-5 shadow-[0_30px_120px_rgba(0,0,0,0.6)] sm:px-8 sm:py-7`}
-      >
-        <div className="pointer-events-none absolute left-1/2 top-[17%] h-[26rem] w-[130%] -translate-x-1/2 rounded-[999px] border border-amber-100/20" />
-        <div className="pointer-events-none absolute left-1/2 top-[20%] h-[20rem] w-[100%] -translate-x-1/2 rounded-[999px] border border-amber-100/15 border-dashed" />
-        <div className="pointer-events-none absolute left-[12%] top-[14%] h-9 w-9 rounded-full border border-amber-200/35 bg-red-500/35 shadow-[0_0_20px_rgba(248,113,113,0.55)]" />
-        <div className="pointer-events-none absolute right-[12%] top-[14%] h-9 w-9 rounded-full border border-amber-200/35 bg-blue-500/35 shadow-[0_0_20px_rgba(96,165,250,0.55)]" />
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-black/35 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-black/40 to-transparent" />
+      {warActive && warPayload && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-orange-900/95 via-amber-900/88 to-black/95" />
+          <div className="absolute inset-0 arena-crowd" />
+          <div className="absolute inset-0 arena-dust" />
+          <div className="absolute bottom-0 left-1/2 h-[46%] w-[120%] -translate-x-1/2 rounded-[50%] border border-amber-200/30 bg-gradient-to-b from-amber-700/35 to-yellow-900/20 shadow-[inset_0_0_180px_rgba(0,0,0,0.45)]" />
 
-        {burst && (
-          <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
-            <div className={`deal-burst rounded-full border px-6 py-2 text-xl font-semibold tracking-wide ${statusToneClass}`}>
-              {burst.text}
+          <div className="absolute left-1/2 top-7 -translate-x-1/2 text-center text-amber-100">
+            <div className="text-xs uppercase tracking-[0.32em] text-amber-200/85">Arena Of War</div>
+            <div className="mt-1 text-4xl font-bold tracking-[0.14em]">GLADIATOR DUEL</div>
+            <div className="mt-2 text-sm text-amber-50/90">
+              {warPhase === "intro" && "The crowd roars as the duel begins."}
+              {warPhase === "deal_down" && "Three face-down cards are dealt to each fighter."}
+              {warPhase === "reveal" && "Final card flips. All eyes on the reveal."}
+              {warPhase === "winner" && warWinnerText}
+              {warPhase === "aftermath" && "Hidden cards revealed. The arena settles."}
             </div>
           </div>
-        )}
 
-        <header className="relative z-10 flex items-start justify-between gap-3 text-amber-50">
-          <div>
-            <div className="text-xs uppercase tracking-[0.26em] text-amber-200/80">Casino Table</div>
-            <h1 className="mt-1 text-2xl font-semibold tracking-wide sm:text-3xl">WAR: Heads Up</h1>
-            <p className="mt-1 text-sm text-emerald-100/85">
-              {state.hasStarted
-                ? "Press Space or Next Deal to continue."
-                : "Press Start Deal to begin the match."}
-            </p>
+          <div className="absolute inset-x-0 top-[22%] text-center">
+            <div className="text-xs uppercase tracking-[0.24em] text-amber-100/80">Opponent</div>
+            <div className="mt-3 flex justify-center gap-2">
+              {Array.from({ length: warDownCount }).map((_, index) => (
+                <CardBack key={`enemy-down-${index}`} className="-rotate-6" />
+              ))}
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setRulesOpen(true)}
-            className="rounded-full border border-amber-100/70 bg-amber-100/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-amber-100 backdrop-blur transition hover:bg-amber-100/20"
-          >
-            Rules
-          </button>
+
+          <div className="absolute left-1/2 top-[48%] -translate-x-1/2">
+            <div className="flex items-center gap-8">
+              <div className="h-44 w-28 rounded-xl border border-amber-100/70 bg-gradient-to-b from-white to-stone-100 p-3 shadow-2xl">
+                {warPhase === "reveal" || warPhase === "winner" || warPhase === "aftermath" ? (
+                  <div className={`flex h-full flex-col justify-between text-2xl font-bold ${cardColor(warPayload.warDealerCard)}`}>
+                    <span>{warPayload.warDealerCard.rank}</span>
+                    <span className="self-center text-3xl">{warPayload.warDealerCard.suit}</span>
+                    <span className="self-end">{warPayload.warDealerCard.rank}</span>
+                  </div>
+                ) : (
+                  <CardBack className="h-full w-full" />
+                )}
+              </div>
+              <div className="text-3xl font-bold text-amber-100 drop-shadow-[0_0_18px_rgba(251,191,36,0.65)]">VS</div>
+              <div className="h-44 w-28 rounded-xl border border-amber-100/70 bg-gradient-to-b from-white to-stone-100 p-3 shadow-2xl">
+                {warPhase === "reveal" || warPhase === "winner" || warPhase === "aftermath" ? (
+                  <div className={`flex h-full flex-col justify-between text-2xl font-bold ${cardColor(warPayload.warPlayerCard)}`}>
+                    <span>{warPayload.warPlayerCard.rank}</span>
+                    <span className="self-center text-3xl">{warPayload.warPlayerCard.suit}</span>
+                    <span className="self-end">{warPayload.warPlayerCard.rank}</span>
+                  </div>
+                ) : (
+                  <CardBack className="h-full w-full" />
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="absolute inset-x-0 bottom-[18%] text-center">
+            <div className="text-xs uppercase tracking-[0.24em] text-amber-100/80">You</div>
+            <div className="mt-3 flex justify-center gap-2">
+              {Array.from({ length: warDownCount }).map((_, index) => (
+                <CardBack key={`player-down-${index}`} className="rotate-6" />
+              ))}
+            </div>
+          </div>
+
+          {warPhase === "winner" && (
+            <div className="absolute inset-x-0 top-[67%] text-center">
+              <span className="arena-banner rounded-full border border-amber-100/80 bg-black/35 px-8 py-3 text-2xl font-semibold tracking-[0.08em] text-amber-100">
+                {warWinnerText}
+              </span>
+            </div>
+          )}
+
+          {warPhase === "aftermath" && (
+            <div className="absolute bottom-4 left-1/2 w-[90%] max-w-5xl -translate-x-1/2 rounded-2xl border border-amber-100/40 bg-black/40 p-4 text-amber-100 backdrop-blur">
+              <div className="text-xs uppercase tracking-[0.18em] text-amber-200/85">Face-down cards revealed</div>
+              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.14em] text-amber-100/75">Opponent hidden cards</div>
+                  <div className="flex gap-2">
+                    {warPayload.burnDealer.map((card, index) => (
+                      <div key={`reveal-dealer-${index}`} className="h-20 w-14 rounded-md border border-amber-100/65 bg-white p-2 shadow-lg">
+                        <div className={`flex h-full flex-col justify-between text-sm font-bold ${cardColor(card)}`}>
+                          <span>{card.rank}</span>
+                          <span className="self-end">{card.suit}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.14em] text-amber-100/75">Your hidden cards</div>
+                  <div className="flex gap-2">
+                    {warPayload.burnPlayer.map((card, index) => (
+                      <div key={`reveal-player-${index}`} className="h-20 w-14 rounded-md border border-amber-100/65 bg-white p-2 shadow-lg">
+                        <div className={`flex h-full flex-col justify-between text-sm font-bold ${cardColor(card)}`}>
+                          <span>{card.rank}</span>
+                          <span className="self-end">{card.suit}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="casino-felt felt-emerald relative mx-auto flex min-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-amber-200/40 px-4 py-5 shadow-[0_30px_120px_rgba(0,0,0,0.6)] sm:px-8 sm:py-7">
+        <header className="relative z-10 flex items-start justify-between gap-4 text-amber-50">
+          <div>
+            <div className="text-xs uppercase tracking-[0.26em] text-amber-200/80">Table Game</div>
+            <h1 className="mt-1 text-2xl font-semibold tracking-wide sm:text-3xl">Casino War</h1>
+            <p className="mt-1 text-sm text-emerald-100/85">Buy in, place ante, deal cards. Tie gives Surrender or Go To War.</p>
+          </div>
+          {state && (
+            <button
+              type="button"
+              onClick={() => {
+                addEvents([`Session ended. Cashed out $${state.bankroll}.`]);
+                setState(null);
+                setWarResult(null);
+                setResult({ title: "Table closed", tone: "amber" });
+              }}
+              className="rounded-full border border-amber-100/70 bg-black/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-amber-100"
+            >
+              Cash Out
+            </button>
+          )}
         </header>
 
-        <section className="relative z-10 mt-6 flex flex-1 flex-col justify-between">
-          <div className="mx-auto w-full max-w-4xl rounded-3xl border border-amber-100/25 bg-black/15 px-4 py-4 backdrop-blur-sm sm:px-6">
-            <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-amber-100/85">
-              <span>Computer stack: {state.game.computerDeck.length}</span>
-              <span>Round {state.game.round}</span>
-              <span>War pile: {state.lastPileCount}</span>
+        {!state ? (
+          <section className="mt-8 rounded-2xl border border-amber-100/25 bg-black/25 p-5 text-amber-50">
+            <div className="text-sm uppercase tracking-[0.18em] text-amber-100/80">Buy In</div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <input
+                type="number"
+                min={50}
+                step={25}
+                value={buyIn}
+                onChange={(event) => setBuyIn(Number(event.target.value))}
+                className="w-40 rounded-lg border border-amber-200/40 bg-black/30 px-3 py-2 text-sm text-amber-50 outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleBuyIn}
+                className="rounded-full border border-amber-50/80 bg-gradient-to-b from-amber-100 to-amber-300 px-7 py-2.5 text-sm font-bold uppercase tracking-[0.1em] text-emerald-900 shadow-lg"
+              >
+                Enter Table
+              </button>
             </div>
-
-            <div className="mt-3 rounded-xl border border-amber-100/25 bg-black/20 px-3 py-2 text-center text-sm text-amber-100/90">
-              {state.lastMessage}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {quickBuyIns.map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => setBuyIn(chip)}
+                  className="rounded-full border border-amber-100/55 bg-black/20 px-3 py-1 text-xs font-semibold text-amber-100"
+                >
+                  ${chip}
+                </button>
+              ))}
             </div>
-
-            <div className="mt-4 grid grid-cols-1 gap-8 sm:grid-cols-3 sm:gap-5">
-              <div className="hidden items-center justify-center sm:flex">
-                <CardView card={state.game.revealedComputer} label="Opponent card" />
+          </section>
+        ) : (
+          <>
+            <section className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+              <div className="rounded-xl border border-amber-100/25 bg-black/25 p-4">
+                <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">Bankroll</div>
+                <div className="mt-1 text-3xl font-bold text-emerald-100">${state.bankroll}</div>
               </div>
-
-              <div className="flex flex-col items-center gap-3 rounded-2xl border border-amber-100/20 bg-black/25 p-4">
-                <div className="text-xs uppercase tracking-[0.16em] text-emerald-50/90">Center Pot</div>
-                <div className="flex items-center gap-4">
-                  <CardView card={state.game.revealedComputer} label="Computer" />
-                  <CardView card={state.game.revealedPlayer} label="Player" />
-                </div>
+              <div className="rounded-xl border border-amber-100/25 bg-black/25 p-4">
+                <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">Hand</div>
+                <div className="mt-1 text-3xl font-bold text-amber-100">{state.handNumber}</div>
               </div>
-
-              <div className="hidden items-center justify-center sm:flex">
-                <div className="rounded-xl border border-amber-100/20 bg-black/25 px-5 py-4 text-center text-amber-100">
-                  <div className="text-xs uppercase tracking-[0.16em] text-amber-100/70">Computer</div>
-                  <div className="mt-1 text-xl font-semibold">{state.game.computerDeck.length}</div>
-                </div>
+              <div className="rounded-xl border border-amber-100/25 bg-black/25 p-4">
+                <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">Ante</div>
+                <div className="mt-1 text-3xl font-bold text-amber-100">${clampAnte(ante)}</div>
               </div>
-            </div>
-          </div>
+              <div className="rounded-xl border border-amber-100/25 bg-black/25 p-4">
+                <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">Shoe Remaining</div>
+                <div className="mt-1 text-3xl font-bold text-amber-100">{state.shoe.length}</div>
+              </div>
+            </section>
 
-          <div className="relative z-10 mt-6 rounded-3xl border border-amber-100/40 bg-gradient-to-b from-amber-200/10 to-amber-300/5 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)] sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-sm uppercase tracking-[0.18em] text-amber-100">Your Rail</div>
-              <div className="text-sm font-semibold text-amber-50">Cards remaining: {state.game.playerDeck.length}</div>
-            </div>
-
-            {state.game.winner && (
-              <div className="mt-3 rounded-xl border border-amber-200/60 bg-amber-100/20 px-4 py-3 text-sm font-semibold text-amber-50">
-                {state.game.winner === "player" ? "You clear the table. Victory." : "House takes it this time."}
+            {result && (
+              <div className={`mt-4 rounded-xl border px-4 py-3 text-center text-sm font-semibold ${toneClass(result.tone)}`}>
+                {result.title}
               </div>
             )}
 
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              {!state.hasStarted ? (
-                <button
-                  type="button"
-                  onClick={() => dispatch({ type: "DEAL" })}
-                  disabled={Boolean(state.game.winner)}
-                  className="rounded-full border border-amber-50/80 bg-gradient-to-b from-amber-100 to-amber-300 px-7 py-2.5 text-sm font-bold uppercase tracking-[0.1em] text-emerald-900 shadow-lg shadow-amber-900/45 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Start Deal
-                </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => dispatch({ type: "DEAL" })}
-                    disabled={Boolean(state.game.winner)}
-                    className="rounded-full border border-amber-50/70 bg-gradient-to-b from-amber-100 to-amber-300 px-6 py-2 text-sm font-bold uppercase tracking-[0.08em] text-emerald-900 shadow-lg shadow-amber-900/40 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Next Deal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => dispatch({ type: "TOGGLE_AUTOPLAY" })}
-                    disabled={Boolean(state.game.winner)}
-                    className="rounded-full border border-emerald-50/50 bg-emerald-900/65 px-5 py-2 text-sm font-semibold uppercase tracking-[0.08em] text-emerald-100 shadow-lg shadow-black/30 transition hover:bg-emerald-900/85 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {state.autoPlay ? "Pause Auto" : "Auto Deals"}
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                onClick={() => dispatch({ type: "NEW_GAME" })}
-                className="rounded-full border border-amber-100/60 bg-amber-200/15 px-5 py-2 text-sm font-semibold uppercase tracking-[0.08em] text-amber-100 transition hover:bg-amber-200/25"
-              >
-                New Game
-              </button>
-            </div>
+            <section className="mt-5 rounded-2xl border border-amber-100/25 bg-black/22 p-5">
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <CardDisplay label="Player" card={state.playerCard} />
+                <CardDisplay label="Dealer" card={state.dealerCard} />
+              </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-amber-100/20 pt-3">
-              <div className="text-xs uppercase tracking-[0.14em] text-amber-100/80">Felt Color</div>
-              <div className="flex flex-wrap items-center gap-2">
-                {FELT_THEME_BUTTONS.map((theme) => (
+              {warResult && !warActive && (
+                <div className="mt-5 rounded-xl border border-amber-100/30 bg-black/25 p-4 text-amber-100">
+                  <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">War Summary</div>
+                  <div className="mt-2 text-sm font-semibold">
+                    Final: Player {cardText(warResult.warPlayerCard)} vs Dealer {cardText(warResult.warDealerCard)}
+                  </div>
+                  <div className="mt-1 text-sm">Hidden player cards: {warResult.burnPlayer.map(cardText).join(" ")}</div>
+                  <div className="text-sm">Hidden dealer cards: {warResult.burnDealer.map(cardText).join(" ")}</div>
+                </div>
+              )}
+            </section>
+
+            <section className="mt-5 rounded-2xl border border-amber-100/25 bg-black/22 p-5">
+              <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">Wager Controls</div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <label className="text-sm text-amber-100">Ante:</label>
+                <input
+                  type="number"
+                  min={limits.min}
+                  max={limits.max}
+                  step={5}
+                  value={ante}
+                  onChange={(event) => setAnte(Number(event.target.value))}
+                  className="w-28 rounded-lg border border-amber-200/40 bg-black/30 px-3 py-2 text-sm text-amber-50 outline-none"
+                />
+                <div className="text-xs text-amber-100/75">Table limits ${limits.min}-${limits.max}</div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {quickAntes.map((chip) => (
                   <button
-                    key={theme.id}
+                    key={chip}
                     type="button"
-                    onClick={() => setFeltTheme(theme.id)}
-                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] transition ${
-                      feltTheme === theme.id
-                        ? "border-amber-100/90 bg-amber-100/30 text-amber-50"
-                        : "border-amber-100/45 bg-black/25 text-amber-100/90 hover:bg-black/35"
-                    }`}
+                    onClick={() => setAnte(chip)}
+                    className="rounded-full border border-amber-100/55 bg-black/20 px-3 py-1 text-xs font-semibold text-amber-100"
                   >
-                    {theme.label}
+                    ${chip}
                   </button>
                 ))}
               </div>
-            </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-amber-100/20 pt-3">
-              <div className="text-xs uppercase tracking-[0.14em] text-amber-100/80">Table Music</div>
-              <button
-                type="button"
-                onClick={() => setMusicOn((previous) => !previous)}
-                className={`rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] transition ${
-                  musicOn
-                    ? "border-emerald-200/80 bg-emerald-300/20 text-emerald-100"
-                    : "border-amber-100/50 bg-black/20 text-amber-100"
-                }`}
-              >
-                {musicOn ? "Music On" : "Music Off"}
-              </button>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={1}
-                value={musicVolume}
-                onChange={(event) => setMusicVolume(Number(event.target.value))}
-                className="h-1.5 w-36 cursor-pointer accent-amber-300"
-                aria-label="Music volume"
-              />
-              <div className="text-xs text-amber-100/80">{musicVolume}%</div>
-            </div>
+              {state.phase === "ready" ? (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleDeal}
+                    disabled={!canPlaceAnte(state, clampAnte(ante)) || warActive}
+                    className="rounded-full border border-amber-50/80 bg-gradient-to-b from-amber-100 to-amber-300 px-7 py-2.5 text-sm font-bold uppercase tracking-[0.1em] text-emerald-900 shadow-lg disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    Deal Hand
+                  </button>
+                  <div className="text-sm text-amber-100/90">Wager ${clampAnte(ante)} on Ante</div>
+                </div>
+              ) : (
+                <div className="mt-4 rounded-xl border border-amber-200/45 bg-amber-500/10 p-4">
+                  <div className="text-sm font-semibold text-amber-100">Tie hand. Choose your option:</div>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={handleSurrender}
+                      disabled={warActive}
+                      className="rounded-full border border-amber-100/70 bg-black/25 px-5 py-2 text-sm font-semibold text-amber-100 disabled:opacity-45"
+                    >
+                      Surrender (lose half ante)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleGoToWar}
+                      disabled={!canGoToWar(state) || warActive}
+                      className="rounded-full border border-amber-50/80 bg-gradient-to-b from-amber-100 to-amber-300 px-5 py-2 text-sm font-bold text-emerald-900 disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      Go To War (match ${state.ante})
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        <section className="mt-5 rounded-xl border border-amber-100/25 bg-black/25 p-4">
+          <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">Dealer Log</div>
+          <div className="mt-2 max-h-48 overflow-y-auto space-y-1 text-sm text-amber-100/90">
+            {events.map((event, index) => (
+              <div key={`${event}-${index}`} className="rounded bg-black/25 px-2 py-1">
+                {event}
+              </div>
+            ))}
           </div>
         </section>
       </div>
-
-      <button
-        type="button"
-        onClick={() => setNotesOpen((open) => !open)}
-        className="fixed bottom-5 left-5 z-40 rounded-full border border-amber-100/70 bg-black/65 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-amber-100 shadow-xl backdrop-blur"
-      >
-        {notesOpen ? "Hide Notes" : "Show Notes"}
-      </button>
-
-      {notesOpen && (
-        <aside
-          className="fixed z-40 w-80 rounded-2xl border border-amber-100/35 bg-black/75 p-3 text-xs text-emerald-100/85 shadow-2xl backdrop-blur"
-          style={{ left: `${notesPosition.x}px`, top: `${notesPosition.y}px` }}
-        >
-          <div
-            className="mb-2 flex cursor-move items-center justify-between rounded-lg bg-amber-100/10 px-2 py-1 text-amber-100"
-            onMouseDown={(event) => {
-              const parent = (event.currentTarget as HTMLElement).parentElement;
-              if (!parent) {
-                return;
-              }
-              const rect = parent.getBoundingClientRect();
-              dragRef.current = {
-                active: true,
-                offsetX: event.clientX - rect.left,
-                offsetY: event.clientY - rect.top
-              };
-            }}
-          >
-            <span className="uppercase tracking-[0.16em]">Dealer Notes</span>
-            <button
-              type="button"
-              onClick={() => setNotesOpen(false)}
-              className="rounded bg-black/35 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em]"
-            >
-              Close
-            </button>
-          </div>
-          <ul className="max-h-64 space-y-1 overflow-y-auto pr-1">
-            {state.log.map((event, idx) => (
-              <li key={`${state.game.round}-${idx}`} className="rounded bg-black/25 px-2 py-1">
-                {event}
-              </li>
-            ))}
-          </ul>
-        </aside>
-      )}
-
-      {rulesOpen && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true">
-          <div className="w-full max-w-lg rounded-2xl border border-amber-100/30 bg-emerald-950 p-5 text-emerald-50 shadow-2xl">
-            <div className="mb-2 text-lg font-semibold tracking-wide text-amber-100">Classic War Rules</div>
-            <ul className="space-y-2 text-sm text-emerald-100/90">
-              <li>52-card deck split 26/26 between you and the computer.</li>
-              <li>Both reveal top card each round. Higher rank wins, ace is high.</li>
-              <li>Winner takes revealed cards and places them at the bottom.</li>
-              <li>On ties: 3 face-down cards, then 1 face-up card. Repeat if tied again.</li>
-              <li>If either player cannot continue a war, that player loses immediately.</li>
-              <li>Game ends when one side has zero cards.</li>
-            </ul>
-            <div className="mt-4 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setRulesOpen(false)}
-                className="rounded-full border border-amber-100/70 bg-amber-100/20 px-5 py-2 text-sm font-semibold uppercase tracking-[0.08em] text-amber-100 transition hover:bg-amber-100/30"
-              >
-                Back To Table
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
