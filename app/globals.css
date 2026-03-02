@@ -3,112 +3,90 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+  font-family: "Space Grotesk", "Sora", "Avenir Next", "Segoe UI", sans-serif;
   background:
-    radial-gradient(circle at 50% -20%, rgba(255, 220, 130, 0.25), transparent 45%),
-    radial-gradient(circle at 20% 120%, rgba(30, 90, 70, 0.55), transparent 40%),
-    linear-gradient(180deg, #02140d 0%, #07271b 100%);
-  color: #ecfdf5;
+    radial-gradient(circle at 8% -10%, rgba(56, 189, 248, 0.2), transparent 34%),
+    radial-gradient(circle at 92% 0%, rgba(37, 99, 235, 0.2), transparent 34%),
+    radial-gradient(circle at 50% 120%, rgba(16, 185, 129, 0.16), transparent 42%),
+    linear-gradient(180deg, #020617 0%, #050b1c 45%, #030712 100%);
+  color: #e2e8f0;
 }
 
-.casino-felt {
-  background:
-    radial-gradient(circle at 50% 35%, rgba(74, 222, 128, 0.14), transparent 38%),
-    radial-gradient(circle at 20% 18%, rgba(56, 189, 142, 0.22), transparent 35%),
-    radial-gradient(circle at 78% 70%, rgba(6, 95, 70, 0.58), transparent 45%),
-    linear-gradient(165deg, #136444 0%, #0d4f38 38%, #0b3c2d 100%);
+.neo-shell {
   position: relative;
 }
 
-.casino-felt.felt-emerald {
+.neo-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
   background:
-    radial-gradient(circle at 50% 35%, rgba(74, 222, 128, 0.14), transparent 38%),
-    radial-gradient(circle at 20% 18%, rgba(56, 189, 142, 0.22), transparent 35%),
-    radial-gradient(circle at 78% 70%, rgba(6, 95, 70, 0.58), transparent 45%),
-    linear-gradient(165deg, #136444 0%, #0d4f38 38%, #0b3c2d 100%);
+    linear-gradient(to right, rgba(15, 23, 42, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: 0.35;
 }
 
-.casino-felt.felt-royal {
-  background:
-    radial-gradient(circle at 50% 35%, rgba(125, 211, 252, 0.14), transparent 38%),
-    radial-gradient(circle at 20% 18%, rgba(59, 130, 246, 0.2), transparent 35%),
-    radial-gradient(circle at 78% 70%, rgba(30, 58, 138, 0.6), transparent 45%),
-    linear-gradient(165deg, #1e3a8a 0%, #1e293b 40%, #172554 100%);
+.neo-table {
+  position: relative;
 }
 
-.casino-felt.felt-crimson {
-  background:
-    radial-gradient(circle at 50% 35%, rgba(251, 113, 133, 0.14), transparent 38%),
-    radial-gradient(circle at 20% 18%, rgba(239, 68, 68, 0.2), transparent 35%),
-    radial-gradient(circle at 78% 70%, rgba(127, 29, 29, 0.6), transparent 45%),
-    linear-gradient(165deg, #7f1d1d 0%, #881337 40%, #450a0a 100%);
-}
-
-.casino-felt::before {
+.neo-table::before {
   content: "";
   position: absolute;
   inset: 0;
+  pointer-events: none;
   background-image:
     url("/assets/table/felt-noise.svg"),
-    linear-gradient(45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%);
-  background-size: 320px 320px, 20px 20px, 20px 20px;
-  opacity: 0.15;
-  pointer-events: none;
+    radial-gradient(circle at 0 0, rgba(255, 255, 255, 0.06), transparent 40%);
+  background-size: 320px 320px, auto;
+  opacity: 0.2;
 }
 
-.casino-felt::after {
+.neo-table::after {
   content: "";
   position: absolute;
   inset: 8px;
-  border-radius: 1.6rem;
-  border: 4px solid rgba(168, 85, 32, 0.35);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 234, 171, 0.28),
-    inset 0 18px 28px rgba(17, 24, 39, 0.42),
-    0 0 0 1px rgba(68, 32, 11, 0.45);
+  border-radius: 1.4rem;
   pointer-events: none;
+  border: 1px solid rgba(125, 211, 252, 0.35);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    inset 0 26px 42px rgba(2, 6, 23, 0.5),
+    0 0 0 1px rgba(30, 41, 59, 0.5);
 }
 
-@keyframes dealBurst {
-  0% {
-    opacity: 0;
-    transform: scale(0.85);
-  }
-  18% {
-    opacity: 1;
-    transform: scale(1.06);
-  }
-  72% {
-    opacity: 1;
-    transform: scale(1.02);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.12);
-  }
+.felt-emerald {
+  background:
+    radial-gradient(circle at 22% 20%, rgba(16, 185, 129, 0.3), transparent 34%),
+    radial-gradient(circle at 80% 0%, rgba(6, 182, 212, 0.22), transparent 36%),
+    linear-gradient(160deg, #042f2e 0%, #022c22 35%, #021a15 100%);
 }
 
-.deal-burst {
-  animation: dealBurst 1.8s ease-out forwards;
+.felt-royal {
+  background:
+    radial-gradient(circle at 22% 20%, rgba(59, 130, 246, 0.28), transparent 34%),
+    radial-gradient(circle at 80% 0%, rgba(103, 232, 249, 0.18), transparent 36%),
+    linear-gradient(160deg, #172554 0%, #111827 35%, #0b1024 100%);
 }
 
-.battle-grid {
-  background-image:
-    linear-gradient(to right, rgba(251, 191, 36, 0.12) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(251, 191, 36, 0.12) 1px, transparent 1px);
-  background-size: 56px 56px;
+.felt-crimson {
+  background:
+    radial-gradient(circle at 22% 20%, rgba(244, 63, 94, 0.26), transparent 34%),
+    radial-gradient(circle at 80% 0%, rgba(251, 146, 60, 0.18), transparent 36%),
+    linear-gradient(160deg, #4c0519 0%, #3f0d1f 35%, #19020b 100%);
 }
 
 @keyframes arenaCrowdPulse {
   0% {
-    opacity: 0.3;
+    opacity: 0.28;
     transform: scale(1);
   }
   50% {
@@ -116,7 +94,7 @@ body {
     transform: scale(1.03);
   }
   100% {
-    opacity: 0.32;
+    opacity: 0.28;
     transform: scale(1);
   }
 }
@@ -124,7 +102,7 @@ body {
 @keyframes arenaDust {
   0% {
     transform: translateY(0) scale(1);
-    opacity: 0.22;
+    opacity: 0.2;
   }
   50% {
     transform: translateY(-10px) scale(1.03);
@@ -132,7 +110,7 @@ body {
   }
   100% {
     transform: translateY(0) scale(1);
-    opacity: 0.22;
+    opacity: 0.2;
   }
 }
 

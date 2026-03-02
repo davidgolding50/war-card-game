@@ -45,12 +45,12 @@ function cardColor(card: Card | null): string {
 
 function toneClass(tone: ResolvedHand["tone"]): string {
   if (tone === "emerald") {
-    return "border-emerald-300/75 bg-emerald-500/25 text-emerald-100";
+    return "border-emerald-300/80 bg-emerald-500/20 text-emerald-100";
   }
   if (tone === "red") {
-    return "border-rose-300/75 bg-rose-600/25 text-rose-100";
+    return "border-rose-300/80 bg-rose-600/20 text-rose-100";
   }
-  return "border-amber-300/75 bg-amber-500/25 text-amber-100";
+  return "border-amber-300/80 bg-amber-500/20 text-amber-100";
 }
 
 function eventTitle(result: DealResult | WarResult): ResolvedHand {
@@ -77,8 +77,8 @@ function eventTitle(result: DealResult | WarResult): ResolvedHand {
 function CardDisplay({ label, card }: { label: string; card: Card | null }) {
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="text-xs uppercase tracking-[0.18em] text-amber-100/85">{label}</div>
-      <div className="h-36 w-24 rounded-xl border border-amber-100/65 bg-gradient-to-b from-white to-stone-100 p-3 shadow-2xl">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-100/75">{label}</div>
+      <div className="h-36 w-24 rounded-2xl border border-white/70 bg-gradient-to-b from-white to-slate-100 p-3 shadow-2xl">
         {card ? (
           <div className={`flex h-full flex-col justify-between text-2xl font-bold ${cardColor(card)}`}>
             <span>{card.rank}</span>
@@ -98,9 +98,18 @@ function CardDisplay({ label, card }: { label: string; card: Card | null }) {
 function CardBack({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`h-20 w-14 rounded-md border border-amber-100/70 bg-gradient-to-b from-indigo-700 to-indigo-950 shadow-2xl ${className}`}
+      className={`h-20 w-14 rounded-lg border border-cyan-200/80 bg-gradient-to-b from-cyan-700 via-blue-900 to-indigo-950 shadow-2xl ${className}`}
     >
-      <div className="grid h-full place-items-center text-xs font-bold tracking-[0.18em] text-amber-100/85">WAR</div>
+      <div className="grid h-full place-items-center text-[10px] font-bold tracking-[0.2em] text-cyan-50/90">WAR</div>
+    </div>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4 backdrop-blur-xl">
+      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/85">{label}</div>
+      <div className="mt-2 text-3xl font-semibold text-cyan-50">{value}</div>
     </div>
   );
 }
@@ -120,6 +129,7 @@ export default function Page() {
   const [warPayload, setWarPayload] = useState<WarResult | null>(null);
   const warTimersRef = useRef<number[]>([]);
   const sfxContextRef = useRef<AudioContext | null>(null);
+
   const [musicOn, setMusicOn] = useState(false);
   const [musicVolume, setMusicVolume] = useState(55);
   const [audioBackend, setAudioBackend] = useState<"asset" | "synth">("asset");
@@ -331,23 +341,6 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    function stopMusic() {
-      if (musicElementRef.current) {
-        musicElementRef.current.pause();
-        musicElementRef.current.currentTime = 0;
-        musicElementRef.current = null;
-      }
-      if (musicTimerRef.current !== null) {
-        window.clearInterval(musicTimerRef.current);
-        musicTimerRef.current = null;
-      }
-      if (musicContextRef.current) {
-        void musicContextRef.current.close();
-        musicContextRef.current = null;
-      }
-      musicGainRef.current = null;
-    }
-
     function startSynthMusic() {
       const AudioContextClass = window.AudioContext;
       if (!AudioContextClass) {
@@ -412,8 +405,25 @@ export default function Page() {
       musicTimerRef.current = window.setInterval(tick, 900);
     }
 
+    function stopAudio() {
+      if (musicElementRef.current) {
+        musicElementRef.current.pause();
+        musicElementRef.current.currentTime = 0;
+        musicElementRef.current = null;
+      }
+      if (musicTimerRef.current !== null) {
+        window.clearInterval(musicTimerRef.current);
+        musicTimerRef.current = null;
+      }
+      if (musicContextRef.current) {
+        void musicContextRef.current.close();
+        musicContextRef.current = null;
+      }
+      musicGainRef.current = null;
+    }
+
     if (!musicOn) {
-      stopMusic();
+      stopAudio();
       return;
     }
 
@@ -454,20 +464,7 @@ export default function Page() {
     return () => {
       cancelled = true;
       assetTrack.removeEventListener("error", onAssetError);
-      if (musicElementRef.current === assetTrack) {
-        musicElementRef.current.pause();
-        musicElementRef.current.currentTime = 0;
-        musicElementRef.current = null;
-      }
-      if (musicTimerRef.current !== null) {
-        window.clearInterval(musicTimerRef.current);
-        musicTimerRef.current = null;
-      }
-      if (musicContextRef.current) {
-        void musicContextRef.current.close();
-        musicContextRef.current = null;
-      }
-      musicGainRef.current = null;
+      stopAudio();
     };
   }, [musicOn, musicVolume]);
 
@@ -509,7 +506,7 @@ export default function Page() {
   const warActive = warPhase !== "idle";
 
   return (
-    <main className="min-h-screen w-full p-3 sm:p-6 lg:p-8">
+    <main className="neo-shell min-h-screen w-full px-3 py-4 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
       {warActive && warPayload && (
         <div className="fixed inset-0 z-50 overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-b from-orange-900/95 via-amber-900/88 to-black/95" />
@@ -619,15 +616,17 @@ export default function Page() {
         </div>
       )}
 
-      <div
-        className={`casino-felt felt-${feltTheme} relative mx-auto flex min-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-amber-200/40 px-4 py-5 shadow-[0_30px_120px_rgba(0,0,0,0.6)] sm:px-8 sm:py-7`}
-      >
-        <header className="relative z-10 flex items-start justify-between gap-4 text-amber-50">
+      <div className={`neo-table felt-${feltTheme} relative mx-auto w-full max-w-7xl overflow-hidden rounded-[2rem] border border-cyan-300/30 p-4 shadow-[0_40px_120px_rgba(0,0,0,0.6)] sm:p-6 lg:p-8`}>
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(56,189,248,0.16),transparent_36%),radial-gradient(circle_at_80%_0%,rgba(6,182,212,0.2),transparent_38%),radial-gradient(circle_at_50%_100%,rgba(14,165,233,0.16),transparent_50%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.09)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.07)_1px,transparent_1px)] bg-[size:26px_26px] opacity-20" />
+
+        <header className="relative z-10 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="text-xs uppercase tracking-[0.26em] text-amber-200/80">Table Game</div>
-            <h1 className="mt-1 text-2xl font-semibold tracking-wide sm:text-3xl">Casino War</h1>
-            <p className="mt-1 text-sm text-emerald-100/85">Buy in, place ante, deal cards. Tie gives Surrender or Go To War.</p>
+            <div className="text-[10px] uppercase tracking-[0.3em] text-cyan-200/80">Neobank Arena</div>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-50 sm:text-4xl">Casino War Pro Table</h1>
+            <p className="mt-2 text-sm text-slate-300/90">Buy in, place ante, deal fast. Tie gives Surrender or Go To War.</p>
           </div>
+
           {state && (
             <button
               type="button"
@@ -637,7 +636,7 @@ export default function Page() {
                 setWarResult(null);
                 setResult({ title: "Table closed", tone: "amber" });
               }}
-              className="rounded-full border border-amber-100/70 bg-black/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-amber-100"
+              className="rounded-full border border-rose-200/50 bg-rose-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-rose-100 transition hover:bg-rose-500/20"
             >
               Cash Out
             </button>
@@ -645,8 +644,8 @@ export default function Page() {
         </header>
 
         {!state ? (
-          <section className="mt-8 rounded-2xl border border-amber-100/25 bg-black/25 p-5 text-amber-50">
-            <div className="text-sm uppercase tracking-[0.18em] text-amber-100/80">Buy In</div>
+          <section className="relative z-10 mt-8 rounded-3xl border border-white/10 bg-slate-950/45 p-6 backdrop-blur-xl">
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-300/90">Buy In</div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <input
                 type="number"
@@ -654,12 +653,12 @@ export default function Page() {
                 step={25}
                 value={buyIn}
                 onChange={(event) => setBuyIn(Number(event.target.value))}
-                className="w-40 rounded-lg border border-amber-200/40 bg-black/30 px-3 py-2 text-sm text-amber-50 outline-none"
+                className="w-44 rounded-xl border border-cyan-200/20 bg-slate-900/65 px-3 py-2 text-sm text-cyan-50 outline-none ring-cyan-300/30 transition focus:ring"
               />
               <button
                 type="button"
                 onClick={handleBuyIn}
-                className="rounded-full border border-amber-50/80 bg-gradient-to-b from-amber-100 to-amber-300 px-7 py-2.5 text-sm font-bold uppercase tracking-[0.1em] text-emerald-900 shadow-lg"
+                className="rounded-xl border border-cyan-200/50 bg-gradient-to-b from-cyan-300 to-blue-500 px-6 py-2.5 text-sm font-bold uppercase tracking-[0.12em] text-slate-950 transition hover:brightness-110"
               >
                 Enter Table
               </button>
@@ -670,7 +669,7 @@ export default function Page() {
                   key={chip}
                   type="button"
                   onClick={() => setBuyIn(chip)}
-                  className="rounded-full border border-amber-100/55 bg-black/20 px-3 py-1 text-xs font-semibold text-amber-100"
+                  className="rounded-full border border-cyan-200/30 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-400/20"
                 >
                   ${chip}
                 </button>
@@ -679,40 +678,28 @@ export default function Page() {
           </section>
         ) : (
           <>
-            <section className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-              <div className="rounded-xl border border-amber-100/25 bg-black/25 p-4">
-                <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">Bankroll</div>
-                <div className="mt-1 text-3xl font-bold text-emerald-100">${state.bankroll}</div>
-              </div>
-              <div className="rounded-xl border border-amber-100/25 bg-black/25 p-4">
-                <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">Hand</div>
-                <div className="mt-1 text-3xl font-bold text-amber-100">{state.handNumber}</div>
-              </div>
-              <div className="rounded-xl border border-amber-100/25 bg-black/25 p-4">
-                <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">Ante</div>
-                <div className="mt-1 text-3xl font-bold text-amber-100">${clampAnte(ante)}</div>
-              </div>
-              <div className="rounded-xl border border-amber-100/25 bg-black/25 p-4">
-                <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">Shoe Remaining</div>
-                <div className="mt-1 text-3xl font-bold text-amber-100">{state.shoe.length}</div>
-              </div>
+            <section className="relative z-10 mt-6 grid grid-cols-1 gap-3 md:grid-cols-4">
+              <StatCard label="Bankroll" value={`$${state.bankroll}`} />
+              <StatCard label="Hand" value={state.handNumber} />
+              <StatCard label="Ante" value={`$${clampAnte(ante)}`} />
+              <StatCard label="Shoe Remaining" value={state.shoe.length} />
             </section>
 
             {result && (
-              <div className={`mt-4 rounded-xl border px-4 py-3 text-center text-sm font-semibold ${toneClass(result.tone)}`}>
+              <div className={`relative z-10 mt-4 rounded-2xl border px-4 py-3 text-center text-sm font-semibold backdrop-blur ${toneClass(result.tone)}`}>
                 {result.title}
               </div>
             )}
 
-            <section className="mt-5 rounded-2xl border border-amber-100/25 bg-black/22 p-5">
+            <section className="relative z-10 mt-5 rounded-3xl border border-white/10 bg-slate-950/45 p-5 backdrop-blur-xl">
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <CardDisplay label="Player" card={state.playerCard} />
                 <CardDisplay label="Dealer" card={state.dealerCard} />
               </div>
 
               {warResult && !warActive && (
-                <div className="mt-5 rounded-xl border border-amber-100/30 bg-black/25 p-4 text-amber-100">
-                  <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">War Summary</div>
+                <div className="mt-5 rounded-2xl border border-cyan-200/20 bg-cyan-500/10 p-4 text-cyan-50">
+                  <div className="text-xs uppercase tracking-[0.16em] text-cyan-100/80">War Summary</div>
                   <div className="mt-2 text-sm font-semibold">
                     Final: Player {cardText(warResult.warPlayerCard)} vs Dealer {cardText(warResult.warDealerCard)}
                   </div>
@@ -722,11 +709,11 @@ export default function Page() {
               )}
             </section>
 
-            <section className="mt-5 rounded-2xl border border-amber-100/25 bg-black/22 p-5">
-              <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">Wager Controls</div>
+            <section className="relative z-10 mt-5 rounded-3xl border border-white/10 bg-slate-950/45 p-5 backdrop-blur-xl">
+              <div className="text-xs uppercase tracking-[0.18em] text-slate-300/90">Wager Controls</div>
 
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <label className="text-sm text-amber-100">Ante:</label>
+                <label className="text-sm text-slate-100">Ante:</label>
                 <input
                   type="number"
                   min={limits.min}
@@ -734,9 +721,9 @@ export default function Page() {
                   step={5}
                   value={ante}
                   onChange={(event) => setAnte(Number(event.target.value))}
-                  className="w-28 rounded-lg border border-amber-200/40 bg-black/30 px-3 py-2 text-sm text-amber-50 outline-none"
+                  className="w-28 rounded-xl border border-cyan-200/20 bg-slate-900/65 px-3 py-2 text-sm text-cyan-50 outline-none ring-cyan-300/30 transition focus:ring"
                 />
-                <div className="text-xs text-amber-100/75">Table limits ${limits.min}-${limits.max}</div>
+                <div className="text-xs text-slate-300/80">Table limits ${limits.min}-${limits.max}</div>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
@@ -745,7 +732,7 @@ export default function Page() {
                     key={chip}
                     type="button"
                     onClick={() => setAnte(chip)}
-                    className="rounded-full border border-amber-100/55 bg-black/20 px-3 py-1 text-xs font-semibold text-amber-100"
+                    className="rounded-full border border-cyan-200/30 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-400/20"
                   >
                     ${chip}
                   </button>
@@ -758,21 +745,21 @@ export default function Page() {
                     type="button"
                     onClick={handleDeal}
                     disabled={!canPlaceAnte(state, clampAnte(ante)) || warActive}
-                    className="rounded-full border border-amber-50/80 bg-gradient-to-b from-amber-100 to-amber-300 px-7 py-2.5 text-sm font-bold uppercase tracking-[0.1em] text-emerald-900 shadow-lg disabled:cursor-not-allowed disabled:opacity-45"
+                    className="rounded-xl border border-cyan-200/60 bg-gradient-to-b from-cyan-300 to-blue-500 px-6 py-2.5 text-sm font-bold uppercase tracking-[0.1em] text-slate-950 shadow-lg transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     Deal Hand
                   </button>
-                  <div className="text-sm text-amber-100/90">Wager ${clampAnte(ante)} on Ante</div>
+                  <div className="text-sm text-slate-200/95">Wager ${clampAnte(ante)} on Ante</div>
                 </div>
               ) : (
-                <div className="mt-4 rounded-xl border border-amber-200/45 bg-amber-500/10 p-4">
-                  <div className="text-sm font-semibold text-amber-100">Tie hand. Choose your option:</div>
+                <div className="mt-4 rounded-2xl border border-violet-200/30 bg-violet-500/10 p-4">
+                  <div className="text-sm font-semibold text-violet-100">Tie hand. Choose your option:</div>
                   <div className="mt-3 flex flex-wrap gap-3">
                     <button
                       type="button"
                       onClick={handleSurrender}
                       disabled={warActive}
-                      className="rounded-full border border-amber-100/70 bg-black/25 px-5 py-2 text-sm font-semibold text-amber-100 disabled:opacity-45"
+                      className="rounded-xl border border-violet-200/50 bg-black/25 px-5 py-2 text-sm font-semibold text-violet-100 disabled:opacity-45"
                     >
                       Surrender (lose half ante)
                     </button>
@@ -780,7 +767,7 @@ export default function Page() {
                       type="button"
                       onClick={handleGoToWar}
                       disabled={!canGoToWar(state) || warActive}
-                      className="rounded-full border border-amber-50/80 bg-gradient-to-b from-amber-100 to-amber-300 px-5 py-2 text-sm font-bold text-emerald-900 disabled:cursor-not-allowed disabled:opacity-45"
+                      className="rounded-xl border border-cyan-200/60 bg-gradient-to-b from-cyan-300 to-blue-500 px-5 py-2 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       Go To War (match ${state.ante})
                     </button>
@@ -791,20 +778,20 @@ export default function Page() {
           </>
         )}
 
-        <section className="mt-5 rounded-xl border border-amber-100/25 bg-black/25 p-4">
-          <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">Dealer Log</div>
-          <div className="mt-2 max-h-48 overflow-y-auto space-y-1 text-sm text-amber-100/90">
+        <section className="relative z-10 mt-5 rounded-3xl border border-white/10 bg-slate-950/45 p-4 backdrop-blur-xl">
+          <div className="text-xs uppercase tracking-[0.18em] text-slate-300/90">Dealer Log</div>
+          <div className="mt-2 max-h-48 space-y-1 overflow-y-auto text-sm text-slate-100/95">
             {events.map((event, index) => (
-              <div key={`${event}-${index}`} className="rounded bg-black/25 px-2 py-1">
+              <div key={`${event}-${index}`} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
                 {event}
               </div>
             ))}
           </div>
         </section>
 
-        <section className="mt-5 rounded-xl border border-amber-100/25 bg-black/25 p-4">
+        <section className="relative z-10 mt-5 rounded-3xl border border-white/10 bg-slate-950/45 p-4 backdrop-blur-xl">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="text-xs uppercase tracking-[0.16em] text-amber-100/80">Felt Color</div>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-300/90">Felt Color</div>
             <div className="flex flex-wrap items-center gap-2">
               {FELT_THEME_BUTTONS.map((theme) => (
                 <button
@@ -813,8 +800,8 @@ export default function Page() {
                   onClick={() => setFeltTheme(theme.id)}
                   className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] transition ${
                     feltTheme === theme.id
-                      ? "border-amber-100/90 bg-amber-100/30 text-amber-50"
-                      : "border-amber-100/45 bg-black/25 text-amber-100/90 hover:bg-black/35"
+                      ? "border-cyan-100/95 bg-cyan-300/30 text-cyan-50"
+                      : "border-cyan-100/35 bg-black/25 text-cyan-100/90 hover:bg-black/35"
                   }`}
                 >
                   {theme.label}
@@ -823,15 +810,15 @@ export default function Page() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-amber-100/20 pt-3">
-            <div className="text-xs uppercase tracking-[0.14em] text-amber-100/80">Table Music</div>
+          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-white/10 pt-3">
+            <div className="text-xs uppercase tracking-[0.14em] text-slate-300/90">Table Music</div>
             <button
               type="button"
               onClick={() => setMusicOn((previous) => !previous)}
               className={`rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] transition ${
                 musicOn
-                  ? "border-emerald-200/80 bg-emerald-300/20 text-emerald-100"
-                  : "border-amber-100/50 bg-black/20 text-amber-100"
+                  ? "border-cyan-200/80 bg-cyan-300/20 text-cyan-100"
+                  : "border-slate-200/25 bg-black/20 text-slate-200"
               }`}
             >
               {musicOn ? "Music On" : "Music Off"}
@@ -843,11 +830,11 @@ export default function Page() {
               step={1}
               value={musicVolume}
               onChange={(event) => setMusicVolume(Number(event.target.value))}
-              className="h-1.5 w-36 cursor-pointer accent-amber-300"
+              className="h-1.5 w-36 cursor-pointer accent-cyan-300"
               aria-label="Music volume"
             />
-            <div className="text-xs text-amber-100/80">{musicVolume}%</div>
-            <div className="text-[11px] uppercase tracking-[0.12em] text-amber-200/75">
+            <div className="text-xs text-slate-300/90">{musicVolume}%</div>
+            <div className="text-[11px] uppercase tracking-[0.12em] text-cyan-200/80">
               Audio: {audioBackend === "asset" ? "Asset Pack" : "Synth Fallback"}
             </div>
           </div>
